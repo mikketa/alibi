@@ -7,7 +7,9 @@
 import { addChatBarButton, ChatBarButton, ChatBarButtonFactory, removeChatBarButton } from "@api/ChatButtons";
 import { addMessagePreSendListener, removeMessagePreSendListener } from "@api/MessageEvents";
 import { updateMessage } from "@api/MessageUpdater";
+import { plugins } from "@api/PluginManager";
 import { definePluginSettings } from "@api/Settings";
+import { openPluginModal } from "@components/settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { FluxDispatcher, MessageStore, SelectedChannelStore, Toasts, useState } from "@webpack/common";
 
@@ -81,8 +83,12 @@ const PapotageButton: ChatBarButtonFactory = ({ channel, isMainChat }) => {
 
     return (
         <ChatBarButton
-            tooltip={on ? "Papotage activé (messages chiffrés)" : "Papotage désactivé"}
+            tooltip={on ? "Papotage activé — clic droit : réglages" : "Papotage désactivé — clic droit : réglages"}
             onClick={toggle}
+            onContextMenu={e => {
+                e.preventDefault(); // pas le menu contextuel natif : ouvrir les réglages du plugin
+                openPluginModal(plugins.Papotage);
+            }}
         >
             <div style={{ color: on ? "var(--green-360)" : "var(--interactive-normal)", display: "flex" }}>
                 <LockIcon on={on} />
