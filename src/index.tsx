@@ -13,44 +13,19 @@ import { openPluginModal } from "@components/settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { FluxDispatcher, MessageStore, SelectedChannelStore, Toasts, useState } from "@webpack/common";
 
-import { decodeEmoji, decodeHidden, encodeEmoji, encodeHidden, parseInput, warmKey } from "./codec.mjs";
+import { decodeEmoji, decodeHidden, encodeHidden, parseInput, warmKey } from "./codec.mjs";
 
 const MARK = "⁠"; // marqueur zero-width : signale un message déjà chiffré
 
 const settings = definePluginSettings({
     passphrase: {
         type: OptionType.STRING,
-        description: "Mot de passe partagé (identique chez tous les participants)",
+        description: "Mot de passe partagé",
         default: ""
-    },
-    autoDecrypt: {
-        type: OptionType.BOOLEAN,
-        description: "Déchiffrer automatiquement les messages reçus",
-        default: true
-    },
-    showLock: {
-        type: OptionType.BOOLEAN,
-        description: "Afficher un 🔓 devant les messages déchiffrés (pour les distinguer)",
-        default: true
-    },
-    customCover: {
-        type: OptionType.STRING,
-        description: "Phrase de couverture perso par défaut (vide = phrase naturelle aléatoire)",
-        default: ""
-    },
-    separator: {
-        type: OptionType.STRING,
-        description: "Séparateur 'couverture | secret' pour écrire soi-même la phrase visible",
-        default: " | "
-    },
-    emojiMode: {
-        type: OptionType.BOOLEAN,
-        description: "Mode emoji : les emojis visibles portent le secret (visible mais codé, pour messages courts)",
-        default: false
     },
     denseMode: {
         type: OptionType.BOOLEAN,
-        description: "Encodage dense : ~33 % de caractères invisibles en moins (le contact doit avoir la même version du plugin)",
+        description: "Messages plus courts (même version requise chez le contact)",
         default: true
     }
 });
@@ -107,7 +82,6 @@ let lastPass = "";                         // si le mot de passe change, on rée
 
 // --- Déchiffrement : remplace le contenu affiché par le vrai message ---------
 async function tryDecrypt(channelId: string, messageId: string, content: string) {
-    if (!settings.store.autoDecrypt) return;
     const pass = settings.store.passphrase;
     if (!pass || !content) return;
     if (pass !== lastPass) { decided.clear(); lastPass = pass; }
@@ -127,7 +101,7 @@ async function tryDecrypt(channelId: string, messageId: string, content: string)
         }
         decided.set(messageId, content);
         if (txt != null) {
-            const shown = settings.store.showLock ? `🔓 ${txt}` : txt;
+            const shown = `🔓 ${txt}`;
             decided.set(messageId, shown); // le contenu remplacé ne repassera pas le filtre
             updateMessage(channelId, messageId, { content: shown });
         }
@@ -170,7 +144,7 @@ let scanTimers: any[] = []; // timers de scan différés, à annuler au stop()
 
 export default definePlugin({
     name: "Papotage",
-    description: "Chiffre tes messages et les cache dans du texte invisible ou des emojis : personne ne voit qu'ils sont chiffrés, toi tu les lis en clair.",
+    description: "Chiffre tes messages et les cache dans du texte invisible.",
     authors: [{ name: "zefarie", id: 0n }],
     dependencies: ["ChatInputButtonAPI", "MessageEventsAPI", "MessageUpdaterAPI"],
     settings,
@@ -182,16 +156,11 @@ export default definePlugin({
             if (!pass || !msg.content) return;
             if (msg.content.includes(MARK)) return; // déjà chiffré : ne pas ré-encoder
 
-            // un séparateur vide ou fait uniquement d'espaces découperait tous les
-            // messages normaux -> repli sur " | " dans ce cas.
-            const sep = settings.store.separator?.trim() ? settings.store.separator : " | ";
-            const { cover, secret } = parseInput(msg.content, sep);
+            // "couverture | secret" pour écrire la façade soi-même, sinon couverture auto
+            const { cover, secret } = parseInput(msg.content);
             if (!secret) return;
-            const chosenCover = cover ?? (settings.store.customCover || undefined);
 
-            const encoded = settings.store.emojiMode
-                ? await encodeEmoji(secret, pass, chosenCover)
-                : await encodeHidden(secret, pass, chosenCover, settings.store.denseMode ? 3 : 2);
+            const encoded = await encodeHidden(secret, pass, cover ?? undefined, settings.store.denseMode ? 3 : 2);
 
             // Discord rejette silencieusement > 2000 caractères : prévenir au lieu
             // de laisser le message ne pas partir sans explication.
