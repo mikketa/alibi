@@ -16,7 +16,9 @@ import { pickOne as pick, randomInt } from "./random.mjs";
 const SHORT = [
     "ok", "ouais", "mdr", "ah ok", "hmm", "jsp", "carrément", "ptdr",
     "grave", "clair", "ça marche", "nickel", "ah bon", "yes", "bah ouais",
-    "mouais", "ah si", "voilà", "exact", "tranquille"
+    "mouais", "ah si", "voilà", "exact", "tranquille",
+    "ah ouais", "trop bien", "je vois", "ça roule", "tqt", "genre",
+    "au pire", "bien vu", "ok ok", "pas mal", "évidemment", "aucune idée"
 ];
 
 const OPENERS = [
@@ -30,25 +32,41 @@ const OPENERS = [
     "ah ok je vois le truc", "mdr arrête", "ouais c'est clair", "bah oui logique",
     "ok noté merci", "hmm je sais pas trop", "ah si si je me souviens", "ouais ça se tente",
     "bon on verra bien", "ok parfait", "ah mince ok", "ouais pas de souci", "bon bref",
-    "ah ouais quand même"
+    "ah ouais quand même",
+    "ah je savais pas tiens", "ouais bon on verra", "franchement ça dépend",
+    "mdr t'as raison en vrai", "attends je réfléchis", "ok mais genre comment",
+    "ah ouais je vois le délire", "bon allez ça marche", "ouais faut que je check",
+    "hmm pas sûr en fait", "ah bah voilà quoi", "ptdr t'es grave toi",
+    "ouais je crois aussi", "ah ok ok je note ça", "bon bah on fait ça alors",
+    "franchement pourquoi pas", "ouais carrément grave", "ah mince j'avais oublié",
+    "ok je te fais signe", "haha ouais c'est ça", "bon écoute pourquoi pas",
+    "ouais non mais clair", "ah t'inquiète c'est bon", "mdr ok si tu veux"
 ];
 
 // Deuxième proposition, pour les gabarits en deux temps.
 const FOLLOWS = [
     "je te redis", "on verra", "faut voir", "j'y pense", "je note", "ça marche",
     "pas de souci", "je te tiens au courant", "à voir demain", "on en reparle",
-    "je check", "faut que j'y réfléchisse"
+    "je check", "faut que j'y réfléchisse",
+    "on s'appelle", "je reviens vers toi", "faut qu'on cale ça", "je te confirme après",
+    "dispo ce soir", "on cale demain", "je regarde de mon côté", "à voir ensemble"
 ];
 
 const QUESTIONS = [
     "t'en penses quoi ?", "tu fais quoi ce soir ?", "c'est bon pour toi ?",
     "on dit quoi du coup ?", "t'es dispo quand ?", "ça te va ?", "tu confirmes ?",
-    "et sinon quoi de neuf ?", "tu pars à quelle heure ?", "c'était bien ?"
+    "et sinon quoi de neuf ?", "tu pars à quelle heure ?", "c'était bien ?",
+    "on se cale ça quand ?", "ça part sur quoi ?", "t'as vu le truc ?",
+    "tu viens du coup ?", "on part à quelle heure ?", "c'est chaud ou pas ?",
+    "tu me redis ?", "ça donne quoi ?"
 ];
 
-// Suffixes optionnels. La chaîne vide domine : une phrase sur deux avec emoji
-// serait elle-même une signature.
-const TAILS = ["", "", "", "", "", "", " 👍", " 😂", " 🤔", " 😅", " 🙌", " 🤷", " 😬", " 🔥"];
+// Suffixes optionnels. La chaîne vide DOMINE largement : une phrase sur deux
+// avec emoji serait elle-même une signature. Ici ~53 % de tirages sans emoji.
+const TAILS = [
+    "", "", "", "", "", "", "", "", "", "",
+    " 👍", " 😂", " 🤔", " 😅", " 🙌", " 🤷", " 😬", " 🔥", " 🙄"
+];
 
 // Gabarits, avec leur poids. La variété de FORME compte autant que celle du
 // vocabulaire : un fil où tous les messages font la même longueur se voit.
