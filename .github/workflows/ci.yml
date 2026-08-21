@@ -37,5 +37,5 @@ jobs:
         run: >
           npx --yes esbuild@0.24 src/index.tsx
           --loader:.tsx=tsx --jsx=automatic --bundle --outfile=/dev/null
-          '--external:@api/*' '--external:@utils/*' '--external:@webpack/*'
-          '--external:react/jsx-runtime'
+          '--external:@api/*' '--external:@components/*' '--external:@utils/*'
+          '--external:@webpack/*' '--external:react/jsx-runtime'

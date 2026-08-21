@@ -15,7 +15,9 @@ import {
     removeMessagePreEditListener, removeMessagePreSendListener
 } from "@api/MessageEvents";
 import { updateMessage } from "@api/MessageUpdater";
+import { plugins } from "@api/PluginManager";
 import { definePluginSettings } from "@api/Settings";
+import { openPluginModal } from "@components/settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { FluxDispatcher, MessageStore, SelectedChannelStore, Toasts, UserStore, useState } from "@webpack/common";
 
@@ -137,12 +139,22 @@ const PapotageButton: ChatBarButtonFactory = ({ channel, isMainChat }) => {
         setOn(enabledChannels.has(channel.id));
     };
 
-    const tooltip = !on ? "Papotage désactivé"
+    const state = !on ? "Papotage désactivé"
         : armed ? "Papotage activé (messages chiffrés)"
             : "Papotage armé mais SANS mot de passe — les envois seront bloqués";
+    // Le mot de passe se règle dans les réglages du plugin : un accès direct au
+    // clic droit évite d'aller les chercher dans la liste des plugins Vencord.
+    const tooltip = `${state} — clic droit : réglages`;
 
     return (
-        <ChatBarButton tooltip={tooltip} onClick={toggle}>
+        <ChatBarButton
+            tooltip={tooltip}
+            onClick={toggle}
+            onContextMenu={e => {
+                e.preventDefault(); // pas le menu natif : ouvrir les réglages du plugin
+                openPluginModal(plugins.Papotage);
+            }}
+        >
             <div style={{ color, display: "flex" }}>
                 <LockIcon on={on} />
             </div>
