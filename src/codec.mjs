@@ -8,8 +8,8 @@
 // Rien de constant n'annonce le payload : ni marqueur de début, ni en-tête de
 // densité, ni octet de repère, et il ne touche ni le premier ni le dernier
 // caractère du message. Chacune de ces régularités a existé ici, a été mesurée,
-// puis supprimée : l'historique et le raisonnement sont dans SECURITY.md,
-// section « Dissimulation ». Toute modification de ce fichier doit la relire.
+// puis supprimée : chacune est vérifiée par `npm run audit`, qui casse la CI
+// si une régularité revient. Toute modification de ce fichier doit rester verte.
 //
 // À dire clairement : rien de tout cela ne rend le canal indétectable. Un
 // scanner qui COMPTE les caractères invisibles d'un message les trouvera
@@ -176,7 +176,7 @@ export function scanSymbols(message, stop = {}) {
 // Le payload est réparti dans les intervalles de la couverture, avec des tailles
 // de paquets tirées au hasard : ni traînée d'un seul tenant, ni découpe
 // reproductible d'un envoi à l'autre. Trois contraintes, chacune corrigeant un
-// détecteur d'une ligne qui a réellement fonctionné ici (SECURITY.md) :
+// détecteur d'une ligne qui a réellement fonctionné ici (voir `npm run audit`) :
 //
 //   - par GRAPHÈMES et non par points de code : insérer un caractère au milieu
 //     de « ❤️ » (U+2764 U+FE0F) ou d'un emoji composé casserait son rendu et

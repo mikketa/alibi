@@ -8,8 +8,8 @@
 //   clair ──▶ [flags(1)] ──▶ deflate? ──▶ padding ──▶ AES-GCM ──▶ octets
 //   octets envoyés = nonce(12 o) || ciphertext || tag(16 o)
 //
-// Le raisonnement derrière chacune des valeurs ci-dessous est dans SECURITY.md,
-// section « Choix cryptographiques » : ne pas y toucher sans l'avoir lue.
+// Chaque valeur ci-dessous est un choix mesuré, pas un réglage : ne pas y
+// toucher sans comprendre pourquoi (PBKDF2 aligné OWASP, tag complet, etc.).
 
 import { randomInt } from "./random.mjs";
 

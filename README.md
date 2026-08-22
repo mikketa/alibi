@@ -1,173 +1,142 @@
+<div align="center">
+
 # Papotage
 
-Plugin Vencord qui chiffre les messages Discord et cache le résultat dans du texte
-invisible. Sans le plugin, un message ressemble à une réponse quelconque
-(« ok ça marche 👍 ») ; avec le plugin et le bon mot de passe, il s'affiche en clair.
+**A Vencord plugin that encrypts your Discord messages and hides them in invisible text.**
 
-## Fonctionnement
+Without the plugin, a message looks like any throwaway reply — `ok ça marche 👍`.
+With the plugin and the right passphrase, it shows the real text instead.
 
-1. Le message est chiffré en AES-GCM 256. La clé est dérivée du mot de passe partagé
-   (PBKDF2-SHA256, 600 000 itérations) **et de l'identifiant du salon** : le même mot
-   de passe donne une clé différente dans chaque conversation.
-2. Les octets chiffrés sont encodés en caractères Unicode invisibles, **dispersés
-   dans** une courte phrase de couverture plutôt que collés à la fin. Discord les
-   préserve.
-3. À la réception, le plugin repère la partie invisible, la déchiffre et remplace le
-   contenu affiché par le vrai message. Les autres ne voient que la couverture.
-4. Chaque message envoyé est comparé à celui que Discord renvoie. S'il a été modifié
-   en route, l'expéditeur est prévenu tout de suite : le destinataire ne pourra pas
-   le lire.
+[![CI](https://github.com/mikketa/papotage/actions/workflows/ci.yml/badge.svg)](https://github.com/mikketa/papotage/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)
 
-Un message chiffré qu'on ne sait **pas** lire n'est signalé par rien : un marqueur à
-l'écran trahirait l'utilisateur devant un témoin ou un partage d'écran. Le silence
-fait partie de la couverture.
+</div>
 
-Le chiffrement s'active salon par salon avec le cadenas de la barre de message
-(gris = off, vert = on, orange = armé mais sans mot de passe).
+---
 
-## Utilisation
+## What it looks like
 
-- **Mot de passe** : à définir dans les réglages du plugin, identique chez tous les
-  participants. À transmettre par un autre canal.
-- **Phrase de couverture** : par défaut une phrase est composée au hasard parmi plus
-  de 1 100 combinaisons, avec des formes variées (du « ok » sec à la question) et une
-  mémoire qui évite de répéter la même phrase à quelques messages d'écart. Le pool
-  intégré étant public, le réglage *Cover Pool* permet d'utiliser ses propres phrases.
-  Pour écrire soi-même la façade et garder une conversation cohérente, utiliser
-  `phrase visible | message secret`.
-  Exemple : `ouais tranquille et toi ? | rdv à 20h` affiche « ouais tranquille et
-  toi ? » pour tout le monde, et le vrai message pour ceux qui ont le plugin.
+| Everyone else sees | You (plugin + passphrase) see |
+| --- | --- |
+| `ouais tranquille et toi ?` | 🔓 `rdv à 20h` |
 
-### Réglages
+Same message. The difference is a few hundred invisible characters scattered
+between the visible ones — encrypted, unreadable without the key.
 
-| Réglage | Rôle |
-|---|---|
-| Passphrase | Mot de passe partagé (obligatoire) |
-| Encodage | Mode d'encodage du secret (voir ci-dessous) |
-| Auto Decrypt | Déchiffrer automatiquement les messages reçus |
-| Show 🔓 | Préfixer les messages déchiffrés pour les repérer |
-| Custom Cover | Phrase de couverture par défaut |
-| Cover Pool | Tes propres phrases de couverture, une par ligne (le pool intégré est public) |
-| Length Hiding | Rembourre par paliers au lieu de blocs de 16 o : masque la longueur, coûte de la place |
-| Separator | Délimiteur entre couverture et secret (par défaut ` &#124; `) |
+## How it works
 
-### Modes d'encodage
+1. The message is encrypted with **AES-GCM 256**. The key comes from the shared
+   passphrase (**PBKDF2-SHA256, 600 000 iterations**) **and the channel ID**, so
+   the same passphrase yields a different key in every conversation.
+2. The ciphertext is encoded as invisible Unicode characters, **scattered inside**
+   a short cover phrase. Discord preserves them.
+3. On reception, the plugin finds the invisible part, decrypts it, and replaces
+   the displayed text. Everyone else only ever sees the cover.
+4. Every message you send is compared to the copy Discord echoes back. If it was
+   altered in transit, you are warned right away.
 
-| Mode | Coût par octet | Capacité (1 message) | Remarque |
-|---|---|---|---|
-| **Invisible dense** (défaut) | 2,67 car. | ≈ 865 car. de secret | 8 symboles zero-width |
-| Invisible sûr | 4 car. | ≈ 550 car. | 4 symboles seulement, le jeu le plus universel |
-| Compact | 1 car. | ≈ 1 225 car. | Sélecteurs de variation, accrochés à la couverture |
-| Emoji | 2 emojis | ≈ 550 car. | Visible et bizarre : réservé aux messages courts |
+> [!NOTE]
+> An encrypted message you **can't** read is flagged by nothing at all — an
+> on-screen marker would give you away to a bystander or a screen share. The
+> silence is part of the cover.
 
-Capacités **mesurées** sur du texte aléatoire (le pire cas) avec la plus longue
-couverture automatique. Un message en français ordinaire se compresse et va
-plusieurs fois plus loin. Le budget est compté en unités UTF-16, plus prudent que
-les points de code — la limite réelle de Discord ne sera donc jamais dépassée par
-surprise. Au-delà, **l'envoi est annulé** avec une erreur indiquant le dépassement
-exact : le message n'est jamais avalé silencieusement par Discord.
+Toggle encryption per channel with the lock button in the message bar
+(grey = off, green = on, orange = armed but no passphrase). **Right-click it to
+open the settings.**
 
-## Limites
+## Usage
 
-- **Mot de passe partagé** : quiconque a la clé lit tout le salon. Pas de secret
-  individuel, pas de confidentialité persistante (*forward secrecy*).
-- **Métadonnées** : Discord voit toujours qui parle à qui et quand. Seul le contenu
-  est caché.
-- **Détectabilité** : invisible à la lecture. Un scan qui *compte* les caractères
-  invisibles d'un message les trouvera toujours — c'est une limite de fond, pas un
-  réglage. Ce qui a été supprimé, ce sont les signatures faciles : plus de marqueur
-  fixe, plus de traînée d'un seul tenant, et le payload ne touche ni le début ni la
-  fin du message. La longueur reste corrélée à celle du secret — brouillée par un
-  remplissage aléatoire, et bien davantage en mode paliers. `npm run audit` vérifie
-  tout ça sur 600 messages par mode — moyenne **et pire cas** — et tourne en
-  intégration continue.
-- **Confiance dans le client** : le texte est en clair dans le client au moment où on
-  le tape, et le mot de passe est stocké en clair dans les réglages Vencord
-  (`settings.json`).
-- **Pas un remplacement de Signal.** Voir [SECURITY.md](SECURITY.md) pour le modèle
-  de menace détaillé.
+> [!IMPORTANT]
+> Set the same **passphrase** for every participant, and share it over a
+> different channel (not inside Discord). At least 12 characters — guessing the
+> passphrase is the most realistic way to break this.
 
-## Compatibilité
+The cover phrase is drawn at random from **2 700+ combinations**, with varied
+shapes and a memory that avoids repeating one a few messages apart.
 
-Le format **v4 est incompatible avec les versions antérieures** : tous les participants doivent mettre
-à jour en même temps. Un message d'une autre version reste affiché comme une phrase
-banale, il ne se déchiffre pas.
+> [!TIP]
+> Write the façade yourself with `visible phrase | secret message`.
+> `ouais tranquille et toi ? | rdv à 20h` shows *"ouais tranquille et toi ?"* to
+> everyone, and the real message to those who have the plugin.
+
+### Settings
+
+| Setting | Role |
+| --- | --- |
+| Passphrase | Shared password (required) |
+| Encoding | How the secret is encoded (see below) |
+| Auto Decrypt | Decrypt incoming messages automatically |
+| Show 🔓 | Prefix decrypted messages so you can tell them apart |
+| Custom Cover | Default cover phrase |
+| Cover Pool | Your own cover phrases, one per line (the built-in pool is public) |
+| Length Hiding | Pad to size buckets instead of 16-byte blocks: masks length, costs space |
+| Separator | Delimiter between cover and secret (default ` \| `) |
+
+### Encoding modes
+
+| Mode | Cost per byte | Capacity (1 message) | Note |
+| --- | --- | --- | --- |
+| **Invisible dense** (default) | 2.67 chars | ≈ 865 chars | 8 zero-width symbols |
+| Invisible safe | 4 chars | ≈ 550 chars | 4 symbols, the most universally preserved set |
+| Compact | 1 char | ≈ 1 225 chars | Variation selectors, attached to the cover |
+| Emoji | 2 emojis | ≈ 550 chars | Visible and weird: short messages only |
+
+Capacities are measured on random text (the worst case). Beyond Discord's 2000-char
+limit the send is **cancelled** with an exact overrun — never silently swallowed.
+
+## Limitations
+
+> [!WARNING]
+> - **Shared passphrase** — anyone with the key reads the whole channel. No
+>   per-person secrecy, no forward secrecy.
+> - **Metadata** — Discord still sees who talks to whom and when.
+> - **Detectability** — invisible to a reader, but a scan that *counts* the
+>   invisible characters will find them. That's a fundamental limit; the payload
+>   just carries no fixed marker and no contiguous run to make it easy.
+> - **Not a Signal replacement.** This is a hobby privacy tool, not one that
+>   stands up to an adversary targeting you personally.
+
+> [!CAUTION]
+> The passphrase is stored **in the clear** in the Vencord settings
+> (`settings.json`), and the text is in the clear inside the client. Anyone with
+> access to your machine reads both.
+
+The **v4 wire format is incompatible with earlier versions**: everyone updates at
+the same time. A message from another version stays an ordinary phrase.
 
 ## Installation
 
-1. Placer le dossier dans `Vencord/src/userplugins/papotage/`.
-2. Compiler Vencord : `pnpm build` (ou `node scripts/build/build.mjs`).
-3. Activer **Papotage** dans les réglages des plugins, puis définir le mot de passe.
+1. Drop the folder into `Vencord/src/userplugins/papotage/`.
+2. Build Vencord: `pnpm build`.
+3. Enable **Papotage** in the plugin settings, then set the passphrase.
 
-Sur **Vesktop**, faire pointer `state.json` (`vencordDir`) sur le dossier `dist` de la
-compilation, et s'assurer qu'il contient un `package.json` (sinon Vesktop retélécharge
-Vencord par-dessus).
+On **Vesktop**, point `state.json` (`vencordDir`) at the build's `dist` folder,
+and make sure it contains a `package.json`.
 
-## Développement
+## Development
 
-Le cœur (chiffrement + stéganographie + logique du plugin) ne dépend pas de Discord et
-se teste en local :
+The core (crypto + steganography + plugin logic) has no Discord dependency and
+runs in Node:
 
 ```bash
-npm test        # Node >= 20
-npm run audit   # cherche les régularités exploitables dans les messages produits
-npm run bench   # mesures de performance
+npm test        # Node >= 20 — 116 tests
+npm run audit   # hunt for exploitable regularities in the produced messages
+npm run bench   # performance measurements
 ```
 
-116 tests couvrent l'aller-retour des trois encodages, la séparation des clés par
-salon, le padding, l'authentification, le rejet d'entrées hostiles (fuzzing), les
-règles d'envoi du plugin, les propriétés de discrétion (absence de marqueur fixe,
-dispersion du payload, intégrité des emojis de couverture, variété des phrases), la
-détection d'un message altéré par Discord, l'équivalence des chemins rapides avec une
-implémentation naïve, et le respect de la règle de dépendance entre modules.
-
-Les tests qui portent sur des grandeurs aléatoires (dispersion, variété des
-couvertures) affirment des statistiques d'échantillon avec des seuils tirés de
-mesures, pas des tirages uniques : la suite est passée de 2 échecs sur 120 à 0 sur
-45 exécutions complètes.
-
-Les chemins chauds sont mesurés, pas devinés (`npm run bench`). Le pré-filtre tourne
-sur chaque message de chaque scan de salon : il rejette un message ordinaire en
-**0,1 µs** contre 57 µs auparavant, et scanner un salon de 500 messages est passé de
-550 µs à une cinquantaine. Le même court-circuit sert désormais à extraire le texte
-visible d'un message — appelé sur chaque envoi et sur chacun de nos messages que
-Discord nous renvoie —, ce qui le fait passer de 7 µs à 0,07 µs sur un message
-ordinaire.
-
-Les API Vencord utilisées (`addChatBarButton`, `addMessagePreSendListener`,
-`addMessagePreEditListener`, `updateMessage`, `OptionType.SELECT`, `Toasts`,
-`UserStore`) ont été vérifiées contre la source du dépôt Vencord, pas de mémoire. La
-CI compile `index.tsx` avec esbuild à chaque changement.
-
-## Structure
-
-Les dépendances pointent vers l'intérieur : `index.tsx` est le seul fichier qui
-connaisse Discord, et il ne parle qu'à la couche application.
+Dependencies point inward: `index.tsx` is the only file that knows about Discord.
+`test/architecture.test.mjs` enforces that graph.
 
 ```
-index.tsx          câblage Vencord (bouton, événements, toasts)
-  └─ plugin-core   règles d'envoi et de réception — aucune dépendance Vencord
-       ├─ codec    encodages : octets <-> caractères invisibles, dispersion
-       │    └─ envelope   chiffrement AES-GCM, dérivation de clé, remplissage
-       ├─ covers   génération des phrases de couverture
+index.tsx          Vencord wiring (button, events, toasts)
+  └─ plugin-core   send/receive rules — no Vencord dependency
+       ├─ codec    encodings: bytes <-> invisible characters, dispersion
+       │    └─ envelope   AES-GCM encryption, key derivation, padding
+       ├─ covers   cover-phrase generation
        └─ envelope
 ```
 
-`test/architecture.test.mjs` fait respecter ce graphe : il refuse un import hors des
-dépendances déclarées, un import Vencord ailleurs que dans le câblage, une couche
-court-circuitée, un cycle — et un fichier ajouté dans `src/` qui ne serait déclaré
-nulle part.
-
-- `src/envelope.mjs` — la partie sensible, isolée pour être relisible seule (~200 lignes)
-- `src/codec.mjs` — encodages et dispersion ; ne chiffre rien, ne choisit pas la couverture
-- `src/covers.mjs` — génération des phrases de couverture
-- `src/random.mjs` — tirage aléatoire uniforme partagé
-- `src/graphemes.mjs` — découpage en graphèmes, partagé par le codec et les couvertures
-- `src/plugin-core.mjs` — règles d'envoi et de réception, sans dépendance Vencord
-- `src/index.tsx` — câblage Vencord
-- `test/` — suite de tests (`node:test`), dont `architecture.test.mjs` qui applique la règle ci-dessus
-- `bench/` — mesures de performance et audit stéganographique
-
-## Licence
+## License
 
 MIT.
