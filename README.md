@@ -2,10 +2,10 @@
 
 # Papotage
 
-**A Vencord plugin that encrypts your Discord messages and hides them in invisible text.**
+**Encrypted Discord messages that look like small talk.**
 
-Without the plugin, a message looks like any throwaway reply — `ok ça marche 👍`.
-With the plugin and the right passphrase, it shows the real text instead.
+A [Vencord](https://vencord.dev) plugin that encrypts what you type and hides
+the ciphertext as invisible characters inside an ordinary-looking phrase.
 
 [![CI](https://github.com/mikketa/papotage/actions/workflows/ci.yml/badge.svg)](https://github.com/mikketa/papotage/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -15,128 +15,136 @@ With the plugin and the right passphrase, it shows the real text instead.
 
 ---
 
-## What it looks like
-
-| Everyone else sees | You (plugin + passphrase) see |
+| What everyone else sees | What you see (plugin + passphrase) |
 | --- | --- |
 | `ouais tranquille et toi ?` | 🔓 `rdv à 20h` |
 
-Same message. The difference is a few hundred invisible characters scattered
-between the visible ones — encrypted, unreadable without the key.
+Both columns are the same Discord message. The secret travels as a few hundred
+zero-width characters scattered between the visible letters. The cover phrases
+are in French, and so is the plugin's interface.
 
-## How it works
+## Features
 
-1. The message is encrypted with **AES-GCM 256**. The key comes from the shared
-   passphrase (**PBKDF2-SHA256, 600 000 iterations**) **and the channel ID**, so
-   the same passphrase yields a different key in every conversation.
-2. The ciphertext is encoded as invisible Unicode characters, **scattered inside**
-   a short cover phrase. Discord preserves them.
-3. On reception, the plugin finds the invisible part, decrypts it, and replaces
-   the displayed text. Everyone else only ever sees the cover.
-4. Every message you send is compared to the copy Discord echoes back. If it was
-   altered in transit, you are warned right away.
+- **AES-GCM 256** encryption. The key is derived with PBKDF2-SHA256
+  (600 000 iterations) from a shared passphrase **and the channel ID**, so the
+  same passphrase gives a different key in every conversation.
+- **No visible trace.** The payload carries no header or fixed marker, never
+  starts or ends the message, and is split into irregular chunks across the
+  cover phrase.
+- **2 674 built-in cover phrases**, with a short memory that avoids repeating
+  one a few messages apart. You can add your own or write the cover yourself.
+- **Fail closed.** If anything goes wrong while sending or editing, the message
+  is cancelled. Plaintext is never sent by accident.
+- **Tamper check.** Each sent message is compared with the copy Discord echoes
+  back, and you are warned if the invisible part was altered in transit.
+- **Silent on failure.** A Papotage message you can't decrypt just shows its
+  cover. A marker would give you away to anyone looking at your screen.
 
-> [!NOTE]
-> An encrypted message you **can't** read is flagged by nothing at all — an
-> on-screen marker would give you away to a bystander or a screen share. The
-> silence is part of the cover.
+## Installation
 
-Toggle encryption per channel with the lock button in the message bar
-(grey = off, green = on, orange = armed but no passphrase). **Right-click it to
-open the settings.**
+Papotage is a Vencord *user plugin*, so it has to be built from source.
+
+1. Copy the contents of `src/` into `Vencord/src/userplugins/papotage/`, so
+   that `index.tsx` sits directly in that folder.
+2. Build Vencord with `pnpm build`.
+3. Enable **Papotage** in Vencord's plugin settings and set the passphrase.
+
+On **Vesktop**, point `vencordDir` in `state.json` at the build's `dist`
+folder, and make sure that folder contains a `package.json`.
 
 ## Usage
 
 > [!IMPORTANT]
-> Set the same **passphrase** for every participant, and share it over a
-> different channel (not inside Discord). At least 12 characters — guessing the
-> passphrase is the most realistic way to break this.
+> Everyone in the conversation must use the **same passphrase**. Share it
+> outside Discord, and make it at least 12 characters long: guessing the
+> passphrase is the most realistic way to break Papotage.
 
-The cover phrase is drawn at random from **2 700+ combinations**, with varied
-shapes and a memory that avoids repeating one a few messages apart.
+Turn encryption on or off per channel with the lock button in the message bar:
 
-> [!TIP]
-> Write the façade yourself with `visible phrase | secret message`.
-> `ouais tranquille et toi ? | rdv à 20h` shows *"ouais tranquille et toi ?"* to
-> everyone, and the real message to those who have the plugin.
+| Lock | Meaning |
+| --- | --- |
+| Grey | Off, messages are sent normally |
+| Green | On, messages are encrypted |
+| Orange | On, but no passphrase is set |
+
+Right-click the lock to open the settings.
+
+With encryption on, type as usual and a random cover phrase is chosen for you.
+To pick the visible text yourself, write `cover | secret`:
+
+```
+ouais tranquille et toi ? | rdv à 20h
+```
 
 ### Settings
 
-| Setting | Role |
+| Setting | What it does |
 | --- | --- |
-| Passphrase | Shared password (required) |
-| Encoding | How the secret is encoded (see below) |
+| Passphrase | Shared secret, required |
+| Encoding | How the ciphertext is written (see below) |
 | Auto Decrypt | Decrypt incoming messages automatically |
 | Show 🔓 | Prefix decrypted messages so you can tell them apart |
-| Custom Cover | Default cover phrase |
-| Cover Pool | Your own cover phrases, one per line (the built-in pool is public) |
-| Length Hiding | Pad to size buckets instead of 16-byte blocks: masks length, costs space |
-| Separator | Delimiter between cover and secret (default ` \| `) |
+| Custom Cover | Fixed cover phrase to use instead of a random one (8 characters minimum) |
+| Cover Pool | Your own cover phrases, one per line. The built-in pool is public |
+| Length Hiding | Pad to size buckets instead of 16-byte blocks. Hides length, costs space |
+| Separator | Delimiter between cover and secret, ` \| ` by default |
 
-### Encoding modes
+### Encodings
 
-| Mode | Cost per byte | Capacity (1 message) | Note |
+| Mode | Cost per byte | Max secret per message | Notes |
 | --- | --- | --- | --- |
-| **Invisible dense** (default) | 2.67 chars | ≈ 865 chars | 8 zero-width symbols |
-| Invisible safe | 4 chars | ≈ 550 chars | 4 symbols, the most universally preserved set |
-| Compact | 1 char | ≈ 1 225 chars | Variation selectors, attached to the cover |
-| Emoji | 2 emojis | ≈ 550 chars | Visible and weird: short messages only |
+| **Invisible dense** (default) | 2.67 chars | ≈ 865 chars | 8 zero-width characters |
+| Invisible safe | 4 chars | ≈ 550 chars | 4 zero-width characters, the most widely preserved set |
+| Compact | 1 char | ≈ 1 225 chars | Unicode variation selectors |
+| Emoji | 2 emojis | ≈ 550 chars | Visible and odd-looking, for short messages |
 
-Capacities are measured on random text (the worst case). Beyond Discord's 2000-char
-limit the send is **cancelled** with an exact overrun — never silently swallowed.
+Capacities are measured on random text, which compresses worst. A message that
+would exceed Discord's 2000-character limit is not sent, and you are told by
+how much it overflows.
 
 ## Limitations
 
 > [!WARNING]
-> - **Shared passphrase** — anyone with the key reads the whole channel. No
->   per-person secrecy, no forward secrecy.
-> - **Metadata** — Discord still sees who talks to whom and when.
-> - **Detectability** — invisible to a reader, but a scan that *counts* the
->   invisible characters will find them. That's a fundamental limit; the payload
->   just carries no fixed marker and no contiguous run to make it easy.
-> - **Not a Signal replacement.** This is a hobby privacy tool, not one that
->   stands up to an adversary targeting you personally.
+> - **One key per channel.** Anyone with the passphrase reads the whole
+>   conversation, past and future. There is no forward secrecy.
+> - **Metadata stays visible.** Discord still knows who talks to whom, and
+>   when.
+> - **Hidden, not undetectable.** A person reading the chat sees nothing, but a
+>   script that counts invisible characters will notice them.
+> - **Not a replacement for Signal.** Papotage is a privacy tool for everyday
+>   use. It won't protect you from someone specifically targeting you.
 
 > [!CAUTION]
-> The passphrase is stored **in the clear** in the Vencord settings
-> (`settings.json`), and the text is in the clear inside the client. Anyone with
-> access to your machine reads both.
+> Vencord stores the passphrase **in plain text** in `settings.json`, and
+> decrypted messages exist in plain text inside the client. Anyone with access
+> to your computer can read both.
 
-The **v4 wire format is incompatible with earlier versions**: everyone updates at
-the same time. A message from another version stays an ordinary phrase.
-
-## Installation
-
-1. Drop the folder into `Vencord/src/userplugins/papotage/`.
-2. Build Vencord: `pnpm build`.
-3. Enable **Papotage** in the plugin settings, then set the passphrase.
-
-On **Vesktop**, point `state.json` (`vencordDir`) at the build's `dist` folder,
-and make sure it contains a `package.json`.
+Version 4 uses a new wire format that **cannot read messages from earlier
+versions**, and earlier versions cannot read it. Everyone needs to update at
+the same time. Messages from another version just show their cover phrase.
 
 ## Development
 
-The core (crypto + steganography + plugin logic) has no Discord dependency and
-runs in Node:
+Everything except the Vencord glue runs in plain Node, with no dependencies:
 
 ```bash
-npm test        # Node >= 20 — 116 tests
-npm run audit   # hunt for exploitable regularities in the produced messages
+npm test        # Node >= 20, 116 tests
+npm run audit   # looks for detectable patterns in generated messages
 npm run bench   # performance measurements
 ```
 
-Dependencies point inward: `index.tsx` is the only file that knows about Discord.
-`test/architecture.test.mjs` enforces that graph.
+Only `src/index.tsx` knows about Discord. `test/architecture.test.mjs`
+enforces this dependency graph:
 
 ```
-index.tsx          Vencord wiring (button, events, toasts)
-  └─ plugin-core   send/receive rules — no Vencord dependency
-       ├─ codec    encodings: bytes <-> invisible characters, dispersion
-       │    └─ envelope   AES-GCM encryption, key derivation, padding
-       ├─ covers   cover-phrase generation
+index.tsx          Vencord wiring: lock button, send/edit hooks, toasts
+  └─ plugin-core   send and receive rules
+       ├─ codec    bytes <-> invisible characters, scattering into the cover
+       │    └─ envelope   AES-GCM, key derivation, padding
+       ├─ covers   cover phrase generation
        └─ envelope
 ```
 
 ## License
 
-MIT.
+[MIT](LICENSE)
