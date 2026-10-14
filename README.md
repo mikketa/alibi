@@ -30,6 +30,9 @@ zero-width characters scattered between the visible letters.
 - 🔐 **AES-GCM 256.** The key is derived with PBKDF2-SHA256 (600 000
   iterations) from a shared passphrase **and the channel ID**, so the same
   passphrase gives a different key in every conversation.
+- ✍️ **Bound to its author.** Each message is authenticated with its sender's
+  Discord ID. Someone who reposts your message under their own name, even
+  without the passphrase, gets nothing that decrypts.
 - 👻 **No visible trace.** The payload has no header or fixed marker, never
   starts or ends the message, and is split into irregular chunks across the
   cover phrase.
@@ -133,7 +136,7 @@ Capacities are measured on random text, which compresses worst.
 > to your computer can read both.
 
 > [!IMPORTANT]
-> Version 4 **cannot read messages from earlier versions**, and earlier
+> Version 5 **cannot read messages from earlier versions**, and earlier
 > versions cannot read it. Everyone needs to update at the same time. Messages
 > from another version just show their cover phrase.
 
@@ -142,7 +145,7 @@ Capacities are measured on random text, which compresses worst.
 Everything except the Vencord glue runs in plain Node, with no dependencies.
 
 ```bash
-npm test        # Node >= 20, 121 tests
+npm test        # Node >= 20, 126 tests
 npm run audit   # looks for detectable patterns in generated messages
 npm run bench   # performance measurements
 ```

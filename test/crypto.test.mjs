@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { wireSize, wireSizeMax } from "../src/envelope.mjs";
+import { open, seal, wireSize, wireSizeMax } from "../src/envelope.mjs";
 import { COVER, CTX, OTHER_CTX, PASS, decodeCompact, encodeCompact, incompressible, invisibleCount } from "./helpers.mjs";
 
 // Octets réellement envoyés pour un secret donné. Le mode compact code un octet
@@ -105,4 +105,24 @@ test("le clair n'apparaît jamais dans le message envoyé", async () => {
     const msg = await encodeCompact(clair, PASS, { cover: "ok ça marche", context: CTX });
     assert.ok(!msg.includes(clair));
     assert.ok(!msg.includes("jeudi"));
+});
+
+test("une trame ne s'ouvre qu'avec l'auteur qui l'a scellée", async () => {
+    // L'auteur est authentifié par GCM sans être transmis : un membre du salon
+    // qui reposte le contenu brut d'un message, même sans le mot de passe,
+    // n'obtient qu'une trame qui ne s'ouvre plus sous son nom.
+    const trame = await seal("on annule ce soir", PASS, { context: CTX, author: "111" });
+    assert.equal(await open(trame, PASS, { context: CTX, author: "111" }), "on annule ce soir");
+    assert.equal(await open(trame, PASS, { context: CTX, author: "222" }), null);
+    assert.equal(await open(trame, PASS, { context: CTX }), null);
+});
+
+test("un mot de passe accentué donne la même clé quelle que soit sa forme Unicode", async () => {
+    // « é » précomposé (U+00E9) ou « e » + accent combinant (U+0301) : deux
+    // claviers différents, une seule clé.
+    const compose = "mot de passe très long".normalize("NFC");
+    const decompose = compose.normalize("NFD");
+    assert.notEqual(compose, decompose);
+    const trame = await seal("salut", compose, { context: CTX });
+    assert.equal(await open(trame, decompose, { context: CTX }), "salut");
 });

@@ -8,6 +8,7 @@ export const PASS = "motdepasse-secret";
 export const COVER = "ouais je te suis là-dessus"; // couverture fixe pour les tests
 export const CTX = "123456789012345678";      // identifiant de salon fictif
 export const OTHER_CTX = "987654321098765432";
+export const AUTHOR = "111111111111111111";    // identifiant d'utilisateur fictif
 
 const ZERO_WIDTH = /[\u200B-\u200D\u2060-\u2064]/g;
 const VARIATION = /[\u{FE00}-\u{FE0F}]|[\u{E0100}-\u{E01EF}]/gu;
@@ -84,7 +85,7 @@ export const ZW_SYMBOLS = [
 // une couverture imposés : les suites par mode observent ainsi de vrais
 // messages, sans le tirage de couverture ni le pré-filtre du plugin.
 async function sealAndEncode(mode, text, pass, { cover, context = "", padding } = {}) {
-    return encode(mode, await seal(text, pass, context, padding), cover);
+    return encode(mode, await seal(text, pass, { context, padding }), cover);
 }
 
 export const encodeHidden = (text, pass, { bits = 3, ...opts } = {}) =>
@@ -92,6 +93,6 @@ export const encodeHidden = (text, pass, { bits = 3, ...opts } = {}) =>
 export const encodeCompact = (text, pass, opts) => sealAndEncode(MODE.COMPACT, text, pass, opts);
 export const encodeEmoji = (text, pass, opts) => sealAndEncode(MODE.EMOJI, text, pass, opts);
 
-export const decodeHidden = (msg, pass, { context = "" } = {}) => decodeAs(MODE.HIDDEN, msg, pass, context);
-export const decodeCompact = (msg, pass, { context = "" } = {}) => decodeAs(MODE.COMPACT, msg, pass, context);
-export const decodeEmoji = (msg, pass, { context = "" } = {}) => decodeAs(MODE.EMOJI, msg, pass, context);
+export const decodeHidden = (msg, pass, { context = "" } = {}) => decodeAs(MODE.HIDDEN, msg, pass, { context });
+export const decodeCompact = (msg, pass, { context = "" } = {}) => decodeAs(MODE.COMPACT, msg, pass, { context });
+export const decodeEmoji = (msg, pass, { context = "" } = {}) => decodeAs(MODE.EMOJI, msg, pass, { context });

@@ -19,9 +19,9 @@ import {
     stripMarkers
 } from "../src/plugin-core.mjs";
 import { EMOJI, detectMode, scanSymbols, visibleText } from "../src/codec.mjs";
-import { CTX, OTHER_CTX, PASS, incompressible, visible } from "./helpers.mjs";
+import { AUTHOR, CTX, OTHER_CTX, PASS, incompressible, visible } from "./helpers.mjs";
 
-const base = { passphrase: PASS, context: CTX };
+const base = { passphrase: PASS, context: CTX, author: AUTHOR };
 
 async function expectError(code, fn) {
     await assert.rejects(fn, e => {
@@ -45,6 +45,15 @@ test("un secret vide après le séparateur ne publie pas la moitié gauche en cl
     const content = await encodeOutgoing({ ...base, raw });
     assert.ok(!visible(content).includes("juste une couverture"));
     assert.equal(await decodeIncoming({ content, ...base }), raw);
+});
+
+test("sans identifiant d'auteur, l'envoi échoue au lieu de partir illisible", async () => {
+    await expectError("no-author", () => encodeOutgoing({ ...base, author: "", raw: "rdv 20h" }));
+});
+
+test("un message reposté par un autre membre ne se déchiffre pas", async () => {
+    const content = await encodeOutgoing({ ...base, raw: "on annule ce soir" });
+    assert.equal(await decodeIncoming({ content, ...base, author: "222222222222222222" }), null);
 });
 
 test("un message vide échoue", async () => {
@@ -120,7 +129,7 @@ test("un séparateur perso est respecté", async () => {
 
 test("un message d'un autre salon ne se déchiffre pas", async () => {
     const content = await encodeOutgoing({ ...base, raw: "secret" });
-    assert.equal(await decodeIncoming({ content, passphrase: PASS, context: OTHER_CTX }), null);
+    assert.equal(await decodeIncoming({ content, passphrase: PASS, context: OTHER_CTX , author: AUTHOR }), null);
 });
 
 test("les messages ordinaires ne déclenchent aucun déchiffrement", async () => {
@@ -167,7 +176,7 @@ test("un message réellement chiffré est bien reconnu comme tel", async () => {
 
 test("sans mot de passe, la réception ne tente rien", async () => {
     const content = await encodeOutgoing({ ...base, raw: "secret" });
-    assert.equal(await decodeIncoming({ content, passphrase: "", context: CTX }), null);
+    assert.equal(await decodeIncoming({ content, passphrase: "", context: CTX , author: AUTHOR }), null);
 });
 
 // --- Protection de l'édition ------------------------------------------------
@@ -215,7 +224,7 @@ test("SeenCache évince les plus anciens sans tout vider", () => {
 // affichés en clair.
 
 const lire = (d, messageId, content, opts = {}) =>
-    d.read({ messageId, content, passphrase: PASS, context: CTX, ...opts });
+    d.read({ messageId, content, passphrase: PASS, context: CTX, author: AUTHOR, ...opts });
 
 test("Decryptor affiche le clair et retient que le message l'est", async () => {
     const d = new Decryptor();
@@ -241,6 +250,15 @@ test("Decryptor ne relance pas un échec déjà constaté", async () => {
     assert.equal(await lire(d, "1", etranger), null);
     // Mémorisé : un re-render ne relancera pas un déchiffrement voué à l'échec.
     assert.equal(d.seen.has("1", etranger), true);
+});
+
+test("Decryptor attend l'auteur sans mémoriser d'échec", async () => {
+    // Certaines mises à jour de Discord arrivent sans auteur : le même contenu,
+    // revenu avec son auteur, doit encore être lu.
+    const d = new Decryptor();
+    const content = await encodeOutgoing({ ...base, raw: "rdv 20h" });
+    assert.equal(await lire(d, "1", content, { author: "" }), null);
+    assert.equal(await lire(d, "1", content), LOCK_PREFIX + "rdv 20h");
 });
 
 test("Decryptor ne marque rien sur un message ordinaire ou illisible", async () => {
@@ -409,14 +427,14 @@ test("un message chiffré avec une autre clé ne laisse aucune trace visible", a
     // marqueur à l'écran trahirait l'utilisateur devant un témoin.
     for (const mode of Object.values(MODE)) {
         const content = await encodeOutgoing({ ...base, raw: "message manqué", mode });
-        assert.equal(await decodeIncoming({ content, passphrase: "autre-mot-de-passe", context: CTX }), null);
+        assert.equal(await decodeIncoming({ content, passphrase: "autre-mot-de-passe", context: CTX , author: AUTHOR }), null);
         assert.ok(isAlibiMessage(content), `mode ${mode} : payload non reconnu`);
     }
 });
 
 test("un message d'un autre salon est reconnu comme chiffré mais illisible", async () => {
     const content = await encodeOutgoing({ ...base, raw: "secret" });
-    assert.equal(await decodeIncoming({ content, passphrase: PASS, context: OTHER_CTX }), null);
+    assert.equal(await decodeIncoming({ content, passphrase: PASS, context: OTHER_CTX , author: AUTHOR }), null);
     assert.ok(isAlibiMessage(content));
 });
 

@@ -60,10 +60,14 @@ function parseInput(raw, separator) {
 // un échec silencieux ici publie le message en clair.
 export async function encodeOutgoing({
     raw, passphrase, mode = MODE.HIDDEN, defaultCover = "", separator = DEFAULT_SEPARATOR,
-    context = "", padding = PADDING.BLOCK, pool = []
+    context = "", author = "", padding = PADDING.BLOCK, pool = []
 }) {
     if (!passphrase) throw new AlibiError("no-passphrase",
         "Alibi : aucun mot de passe défini. Message NON envoyé (il serait parti en clair).");
+    // Le message est lié à son auteur : sans identifiant, personne ne pourrait
+    // le lire. Mieux vaut ne rien envoyer que publier une couverture vide.
+    if (!author) throw new AlibiError("no-author",
+        "Alibi : impossible d'identifier ton compte. Message NON envoyé.");
     if (!raw || !raw.trim()) throw new AlibiError("empty", "Alibi : message vide.");
 
     const { cover, secret } = parseInput(raw, resolveSeparator(separator));
@@ -71,7 +75,7 @@ export async function encodeOutgoing({
     // Le codec la reçoit toute faite et n'a pas à connaître le pool.
     let content;
     try {
-        content = encode(mode, await seal(secret, passphrase, context, padding),
+        content = encode(mode, await seal(secret, passphrase, { context, author, padding }),
             pickCover(cover ?? defaultCover, { pool }));
     } catch (e) {
         // Une couverture trop courte n'est pas une panne de chiffrement : c'est
@@ -103,22 +107,23 @@ export function isAlibiMessage(content) {
 // Essaie chaque trame que le mode `mode` peut lire dans le message. Le codec
 // propose, l'enveloppe tranche : elle écarte les longueurs impossibles sans
 // déchiffrer, donc en pratique une seule trame est vraiment essayée.
-export async function decodeAs(mode, content, passphrase, context = "") {
+export async function decodeAs(mode, content, passphrase, { context = "", author = "" } = {}) {
     for (const frame of frames(mode, content)) {
-        const text = await open(frame, passphrase, context);
+        const text = await open(frame, passphrase, { context, author });
         if (text != null) return text;
     }
     return null;
 }
 
-// Renvoie le texte clair, ou null si ce n'est pas pour nous / mauvaise clé.
+// Renvoie le texte clair, ou null si ce n'est pas pour nous / mauvaise clé /
+// message reposté par quelqu'un d'autre que son auteur.
 // Ne lève jamais : un message hostile ne doit pas casser le rendu du salon.
-export async function decodeIncoming({ content, passphrase, context = "" }) {
-    if (!passphrase || !content) return null;
+export async function decodeIncoming({ content, passphrase, context = "", author = "" }) {
+    if (!passphrase || !content || !author) return null;
     const mode = detectMode(content);
     if (!mode) return null;
     try {
-        return await decodeAs(mode, content, passphrase, context);
+        return await decodeAs(mode, content, passphrase, { context, author });
     } catch {
         return null;
     }
@@ -180,7 +185,7 @@ export class Decryptor {
     // Un message chiffré qu'on ne sait PAS lire n'est, lui, marqué par rien : un
     // signe à l'écran trahirait l'utilisateur devant un témoin ou un partage
     // d'écran. L'échec silencieux est un choix, pas un oubli.
-    async read({ messageId, content, passphrase, context = "", showLock = true }) {
+    async read({ messageId, content, passphrase, context = "", author = "", showLock = true }) {
         if (passphrase !== this.passphrase) {
             this.passphrase = passphrase;
             this.seen.clear(); // retenter tout le salon avec la nouvelle clé
@@ -188,7 +193,9 @@ export class Decryptor {
             // `decrypted` n'est PAS vidé : les messages déjà affichés en clair le
             // restent, et leur édition doit continuer d'être interceptée.
         }
-        if (!passphrase || !content) return null;
+        // Sans auteur (mise à jour partielle de Discord), rien n'est tenté NI
+        // mémorisé : le même contenu, revenu avec son auteur, doit être lu.
+        if (!passphrase || !content || !author) return null;
         // Dédoublonnage AVANT le pré-filtre : un message déjà traité (échec
         // compris, ou contenu déjà remplacé) ne relance ni la détection ni le
         // déchiffrement.
@@ -196,7 +203,7 @@ export class Decryptor {
 
         this.inFlight.add(messageId);
         try {
-            const text = await decodeIncoming({ content, passphrase, context });
+            const text = await decodeIncoming({ content, passphrase, context, author });
             this.seen.set(messageId, content);
             if (text == null) return null;
             const shown = showLock ? LOCK_PREFIX + text : text;

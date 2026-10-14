@@ -11,7 +11,7 @@ import { PADDING, wireSize } from "../src/envelope.mjs";
 import { pickCover, resetCoverHistory } from "../src/covers.mjs";
 import { encodeOutgoing } from "../src/plugin-core.mjs";
 import {
-    COVER, CTX, PASS, ZW_SYMBOLS, decodeCompact, decodeHidden, encodeCompact, encodeHidden,
+    AUTHOR, COVER, CTX, PASS, ZW_SYMBOLS, decodeCompact, decodeHidden, encodeCompact, encodeHidden,
     incompressible, isSubsequence, longestInvisibleRun, visible
 } from "./helpers.mjs";
 
@@ -190,6 +190,6 @@ test("une liste perso traverse la couche application jusqu'au message", async ()
     // phrase et la lui passe toute faite. Le test emprunte donc exactement le
     // chemin du plugin, ce qui le rend plus fidèle qu'avant.
     const pool = ["mon message de couverture à moi"];
-    const msg = await encodeOutgoing({ raw: "secret", passphrase: PASS, context: CTX, pool });
+    const msg = await encodeOutgoing({ raw: "secret", passphrase: PASS, context: CTX, author: AUTHOR, pool });
     assert.equal(visible(msg), pool[0]);
 });

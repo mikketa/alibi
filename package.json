@@ -1,6 +1,6 @@
 {
     "name": "alibi",
-    "version": "4.1.0",
+    "version": "5.0.0",
     "description": "Vencord plugin that encrypts Discord messages and hides them as invisible characters inside ordinary-looking phrases.",
     "type": "module",
     "engines": {

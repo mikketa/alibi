@@ -7,6 +7,7 @@
 //
 //   clair ──▶ [flags(1)] ──▶ deflate? ──▶ padding ──▶ AES-GCM ──▶ octets
 //   octets envoyés = nonce(12 o) || ciphertext || tag(16 o)
+//   données authentifiées (non transmises) = identifiant de l'auteur
 //
 // Chaque valeur ci-dessous est un choix mesuré, pas un réglage : ne pas y
 // toucher sans comprendre pourquoi (PBKDF2 aligné OWASP, tag complet, etc.).
@@ -16,9 +17,9 @@ import { randomInt } from "./random.mjs";
 const ENC = new TextEncoder();
 const DEC = new TextDecoder();
 
-// Garde l'ancien nom du plugin : il entre dans le sel, le renommer rendrait
-// illisibles tous les messages déjà envoyés.
-const DOMAIN = "papotage-v4";  // sépare les versions de protocole ET les contextes
+// Entre dans le sel : le changer rend illisibles tous les messages déjà
+// envoyés. La v5 l'a fait volontairement, en liant chaque message à son auteur.
+const DOMAIN = "alibi-v5";     // sépare les versions de protocole ET les contextes
 const ITER = 600_000;          // PBKDF2 aligné OWASP ; coût amorti par le cache de clé
 const NONCE_LEN = 12;          // = taille d'IV native de GCM, aucun remplissage
 const TAG_BITS = 128;          // tag complet : pas de troncature, pas de limite d'invocations
@@ -113,7 +114,13 @@ function unframe(padded) {
 const KEY_CACHE_MAX = 16;
 const keyCache = new Map(); // `${context}\0${passphrase}` -> Promise<CryptoKey>
 
-function deriveKey(passphrase, context = "") {
+// Un même mot de passe peut arriver sous deux formes Unicode selon le clavier
+// ou le système : « é » précomposé (U+00E9) ou « e » + accent combinant
+// (U+0065 U+0301). Sans normalisation, deux participants qui tapent la même
+// chose obtiennent deux clés, et leurs messages restent illisibles sans
+// aucune explication.
+function deriveKey(rawPassphrase, context = "") {
+    const passphrase = rawPassphrase.normalize("NFC");
     const id = `${context}\u0000${passphrase}`; // séparateur impossible dans un mot de passe
     const cached = keyCache.get(id);
     if (cached) {
@@ -145,8 +152,15 @@ export function forgetKeys() {
 }
 
 // --- Sceller / ouvrir -------------------------------------------------------
+// `author` (l'identifiant Discord de l'expéditeur) est authentifié par GCM sans
+// être transmis. Sans lui, n'importe quel membre du salon, même sans le mot de
+// passe, pouvait reposter le contenu brut d'un message chiffré sous son propre
+// nom : les lecteurs voyaient un clair valide, attribué au mauvais auteur. Lié
+// à l'auteur, ce message copié ne s'ouvre plus.
+const aad = author => ENC.encode(author);
+
 // Renvoie la trame : nonce || ciphertext || tag.
-export async function seal(text, passphrase, context = "", padding = PADDING.BLOCK) {
+export async function seal(text, passphrase, { context = "", author = "", padding = PADDING.BLOCK } = {}) {
     const key = await deriveKey(passphrase, context);
     const raw = ENC.encode(text);
 
@@ -158,7 +172,8 @@ export async function seal(text, passphrase, context = "", padding = PADDING.BLO
 
     const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LEN));
     const ct = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: nonce, tagLength: TAG_BITS }, key, frame(flags, body, padding));
+        { name: "AES-GCM", iv: nonce, tagLength: TAG_BITS, additionalData: aad(author) },
+        key, frame(flags, body, padding));
     return concat([nonce, new Uint8Array(ct)], NONCE_LEN + ct.byteLength);
 }
 
@@ -173,14 +188,15 @@ const FRAME_HEAD = NONCE_LEN + TAG_BITS / 8;
 const plausibleFrame = len => len >= FRAME_HEAD + PAD_BLOCK && (len - FRAME_HEAD) % PAD_BLOCK === 0;
 
 // Renvoie le texte clair, ou null : longueur impossible, mauvaise clé, mauvais
-// contexte, message d'un inconnu. Ne lève jamais — une trame illisible n'est
-// pas une exception, c'est à ça que ressemble tout message ordinaire d'un salon.
-export async function open(bytes, passphrase, context = "") {
+// contexte, mauvais auteur, message d'un inconnu. Ne lève jamais — une trame
+// illisible n'est pas une exception, c'est à ça que ressemble tout message
+// ordinaire d'un salon.
+export async function open(bytes, passphrase, { context = "", author = "" } = {}) {
     if (!plausibleFrame(bytes.length)) return null;
     try {
         const key = await deriveKey(passphrase, context);
         const padded = new Uint8Array(await crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: bytes.subarray(0, NONCE_LEN), tagLength: TAG_BITS },
+            { name: "AES-GCM", iv: bytes.subarray(0, NONCE_LEN), tagLength: TAG_BITS, additionalData: aad(author) },
             key, bytes.subarray(NONCE_LEN)));
         const inner = unframe(padded);
         const body = inner.subarray(1);

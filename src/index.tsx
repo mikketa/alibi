@@ -91,6 +91,9 @@ function toast(type: any, message: string) {
 function encodeSettings() {
     return {
         passphrase: settings.store.passphrase,
+        // Le message est lié à son auteur : c'est forcément nous, à l'envoi
+        // comme à l'édition (on n'édite que ses propres messages).
+        author: UserStore.getCurrentUser()?.id ?? "",
         mode: settings.store.mode,
         defaultCover: settings.store.customCover ?? "",
         separator: settings.store.separator,
@@ -165,23 +168,30 @@ const AlibiButton: ChatBarButtonFactory = ({ channel, isMainChat }) => {
 const decryptor = new Decryptor(); // dédoublonnage, messages affichés en clair
 const ledger = new SendLedger();   // envois en attente de retour par Discord
 
-async function tryDecrypt(channelId: string, messageId: string, content: string) {
+// L'auteur manque dans certaines mises à jour partielles de Discord : on le
+// reprend alors du message déjà en mémoire.
+function authorOf(channelId: string, m: any): string {
+    return m.author?.id ?? MessageStore.getMessage(channelId, m.id)?.author?.id ?? "";
+}
+
+async function tryDecrypt(channelId: string, m: any) {
     if (!settings.store.autoDecrypt) return;
     // Le contexte = le salon : la clé diffère d'une conversation à l'autre.
+    // L'auteur : un message reposté par quelqu'un d'autre ne s'ouvre pas.
     const shown = await decryptor.read({
-        messageId, content, context: channelId,
+        messageId: m.id, content: m.content, context: channelId, author: authorOf(channelId, m),
         passphrase: settings.store.passphrase, showLock: settings.store.showLock
     });
-    if (shown != null) updateMessage(channelId, messageId, { content: shown });
+    if (shown != null) updateMessage(channelId, m.id, { content: shown });
 }
 
 // Les événements Flux appellent tryDecrypt sans l'attendre : une exception
 // inattendue ne doit pas remonter en unhandled rejection.
-const decryptLater = (channelId: string, messageId: string, content: string) =>
-    void tryDecrypt(channelId, messageId, content).catch(() => { });
+const decryptLater = (channelId: string, m: any) =>
+    void tryDecrypt(channelId, m).catch(() => { });
 
 const decryptAll = (channelId: string, msgs: any[]) => {
-    for (const m of msgs) if (m?.content) decryptLater(channelId, m.id, m.content);
+    for (const m of msgs) if (m?.content) decryptLater(channelId, m);
 };
 
 function scanChannel(channelId?: string) {
@@ -208,9 +218,9 @@ const onCreate = (e: any) => {
             "Alibi : Discord a modifié ton message en le publiant. "
             + "Le destinataire ne pourra pas le lire — essaie le mode « Invisible sûr ».");
     }
-    decryptLater(m.channel_id, m.id, m.content);
+    decryptLater(m.channel_id, m);
 };
-const onUpdate = (e: any) => { const m = e?.message; if (m?.content) decryptLater(m.channel_id, m.id, m.content); };
+const onUpdate = (e: any) => { const m = e?.message; if (m?.content) decryptLater(m.channel_id, m); };
 const onSelect = (e: any) => {
     // Pré-dérive la clé, mais SEULEMENT là où le chiffrement est armé : chaque
     // dérivation coûte ~104 ms de CPU (mesuré) et occupe une place dans un cache

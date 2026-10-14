@@ -5,9 +5,9 @@
 
 import { detectMode } from "../src/codec.mjs";
 import { decodeIncoming, encodeOutgoing } from "../src/plugin-core.mjs";
-import { CTX, PASS, decodeHidden, encodeHidden, incompressible } from "../test/helpers.mjs";
+import { AUTHOR, CTX, PASS, decodeHidden, encodeHidden, incompressible } from "../test/helpers.mjs";
 
-const base = { passphrase: PASS, context: CTX };
+const base = { passphrase: PASS, context: CTX, author: AUTHOR };
 
 function bench(label, iterations, fn) {
     const t0 = process.hrtime.bigint();
