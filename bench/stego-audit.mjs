@@ -18,9 +18,8 @@
 //   3. une distribution non uniforme des symboles ;
 //   4. un ensemble restreint de valeurs possibles (longueurs quantifiées).
 
-import { encodeCompact, encodeHidden } from "../src/codec.mjs";
 import { pickCover } from "../src/covers.mjs";
-import { CTX, PASS, ZW_SYMBOLS, longestInvisibleRun } from "../test/helpers.mjs";
+import { CTX, PASS, ZW_SYMBOLS, encodeCompact, encodeHidden, longestInvisibleRun } from "../test/helpers.mjs";
 
 const N = 600;
 const VS = /[\u{FE00}-\u{FE0F}]|[\u{E0100}-\u{E01EF}]/u;

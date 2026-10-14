@@ -22,9 +22,8 @@ import definePlugin, { OptionType } from "@utils/types";
 import { FluxDispatcher, MessageStore, SelectedChannelStore, Toasts, UserStore, useState } from "@webpack/common";
 
 import {
-    decodeIncoming, encodeOutgoing, forgetKeys, isAlibiMessage, LOCK_PREFIX,
-    MIN_COVER_GRAPHEMES, MODE, PADDING, AlibiError, parseCoverPool,
-    SeenCache, SendLedger, stripMarkers, warmKey
+    AlibiError, Decryptor, encodeOutgoing, isAlibiMessage, MIN_COVER_GRAPHEMES, MODE,
+    PADDING, parseCoverPool, SendLedger, stripMarkers, warmKey
 } from "./plugin-core.mjs";
 
 const settings = definePluginSettings({
@@ -163,51 +162,17 @@ const AlibiButton: ChatBarButtonFactory = ({ channel, isMainChat }) => {
 };
 
 // --- Déchiffrement ----------------------------------------------------------
-const inFlight = new Set<string>();  // déchiffrements simultanés (anti-doublon)
-const seen = new SeenCache();        // messageId -> contenu déjà traité (borné, évincé)
-const ledger = new SendLedger();     // envois en attente de retour par Discord
-let lastPass = "";                   // si le mot de passe change, on réessaie tout
-
-// Messages dont on a remplacé le contenu affiché par le clair. Volontairement
-// SANS limite de taille et jamais vidé en cours de session : oublier une entrée
-// ici, c'est perdre la protection à l'édition sur un message dont le store
-// contient le secret en clair. Ce ne sont que des identifiants.
-const decrypted = new Set<string>();
-
-function passphraseChanged(pass: string) {
-    if (pass === lastPass) return;
-    lastPass = pass;
-    seen.clear();   // retenter le déchiffrement de tout le salon avec la nouvelle clé
-    forgetKeys();
-    // `decrypted` n'est PAS vidé : les messages déjà affichés en clair le restent,
-    // et leur édition doit continuer d'être interceptée.
-}
+const decryptor = new Decryptor(); // dédoublonnage, messages affichés en clair
+const ledger = new SendLedger();   // envois en attente de retour par Discord
 
 async function tryDecrypt(channelId: string, messageId: string, content: string) {
     if (!settings.store.autoDecrypt) return;
-    const pass = settings.store.passphrase;
-    passphraseChanged(pass);
-    if (!pass || !content) return;
-    // Dédoublonnage AVANT le pré-filtre : un message déjà traité (échec compris,
-    // ou contenu déjà remplacé) ne relance ni la détection ni le déchiffrement.
-    if (inFlight.has(messageId) || seen.has(messageId, content)) return;
-
-    inFlight.add(messageId);
-    try {
-        // Le contexte = le salon : la clé diffère d'une conversation à l'autre.
-        const txt = await decodeIncoming({ content, passphrase: pass, context: channelId });
-        seen.set(messageId, content);
-        // Un message chiffré qu'on ne sait pas lire n'est signalé par RIEN :
-        // le marquer à l'écran trahirait l'utilisateur devant un témoin ou un
-        // partage d'écran. Le silence fait partie de la couverture.
-        if (txt == null) return;
-        const shown = settings.store.showLock ? LOCK_PREFIX + txt : txt;
-        seen.set(messageId, shown); // le contenu remplacé ne repassera pas le filtre
-        decrypted.add(messageId);
-        updateMessage(channelId, messageId, { content: shown });
-    } finally {
-        inFlight.delete(messageId);
-    }
+    // Le contexte = le salon : la clé diffère d'une conversation à l'autre.
+    const shown = await decryptor.read({
+        messageId, content, context: channelId,
+        passphrase: settings.store.passphrase, showLock: settings.store.showLock
+    });
+    if (shown != null) updateMessage(channelId, messageId, { content: shown });
 }
 
 // Les événements Flux appellent tryDecrypt sans l'attendre : une exception
@@ -317,7 +282,7 @@ export default definePlugin({
             // Même raison qu'à l'envoi : une exception qui s'échappe republierait
             // le clair dans le salon.
             try {
-                if (!decrypted.has(messageId)) return;
+                if (!decryptor.wasDecrypted(messageId)) return;
                 msg.content = await encodeOutgoing({
                     ...encodeSettings(), raw: stripMarkers(msg.content), context: channelId
                 });
@@ -348,8 +313,6 @@ export default definePlugin({
         for (const [event, handler] of Object.entries(FLUX_HANDLERS)) {
             FluxDispatcher.unsubscribe(event, handler);
         }
-        seen.clear();
-        decrypted.clear();
-        forgetKeys(); // ne pas laisser traîner les clés dérivées après un stop
+        decryptor.reset();
     }
 });

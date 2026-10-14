@@ -7,11 +7,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { decodeCompact, decodeHidden, encodeCompact, encodeHidden } from "../src/codec.mjs";
 import { PADDING, wireSize } from "../src/envelope.mjs";
 import { pickCover, resetCoverHistory } from "../src/covers.mjs";
 import { encodeOutgoing } from "../src/plugin-core.mjs";
-import { COVER, CTX, PASS, ZW_SYMBOLS, incompressible, isSubsequence, longestInvisibleRun, visible } from "./helpers.mjs";
+import {
+    COVER, CTX, PASS, ZW_SYMBOLS, decodeCompact, decodeHidden, encodeCompact, encodeHidden,
+    incompressible, isSubsequence, longestInvisibleRun, visible
+} from "./helpers.mjs";
 
 // --- Signatures de format ---------------------------------------------------
 

@@ -8,9 +8,8 @@
 //   index.tsx        infrastructure  — le seul à connaître Vencord
 //     └──> plugin-core   application  — règles d'envoi et de réception
 //            ├──> codec      encodages (octets <-> caractères)
-//            │      └──> envelope   chiffrement
 //            ├──> covers     phrases de couverture
-//            └──> envelope
+//            └──> envelope   chiffrement
 //
 // Les dépendances pointent vers l'intérieur. Rien de ce qui est à l'intérieur
 // ne sait ce qui l'entoure.
@@ -33,10 +32,10 @@ const AUTORISE = {
     // le relire seul, sans dérouler le reste du projet.
     "envelope.mjs": ["random.mjs"],
     "covers.mjs": ["graphemes.mjs", "random.mjs"],
-    // Le codec n'importe PAS covers : encoder est un mécanisme, choisir la
-    // phrase affichée est une décision de produit. Les mélanger lui rendrait un
-    // paramètre `pool` qu'il ne ferait que relayer.
-    "codec.mjs": ["envelope.mjs", "graphemes.mjs", "random.mjs"],
+    // Le codec n'importe ni covers ni envelope : encoder est un mécanisme,
+    // choisir la phrase affichée une décision de produit, et chiffrer un autre
+    // métier encore. C'est plugin-core qui assemble les trois.
+    "codec.mjs": ["graphemes.mjs", "random.mjs"],
     "plugin-core.mjs": ["codec.mjs", "covers.mjs", "envelope.mjs"],
     "index.tsx": ["plugin-core.mjs"]
 };

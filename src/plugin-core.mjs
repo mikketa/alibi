@@ -3,37 +3,18 @@
 // Tout ce qui décide *quoi* envoyer et *quoi* déchiffrer vit ici : aucune
 // dépendance à Discord, donc testable en Node. `index.tsx` ne garde que le
 // câblage (boutons, événements Flux, toasts).
+//
+// C'est aussi le seul module qui assemble les trois mécanismes : `envelope`
+// chiffre, `codec` cache les octets, `covers` choisit la phrase affichée.
+// Aucun des trois ne connaît les deux autres.
 
-import {
-    decodeCompact, decodeEmoji, decodeHidden,
-    encodeCompact, encodeEmoji, encodeHidden,
-    scanSymbols,
-    visibleText
-} from "./codec.mjs";
+import { MODE, detectMode, encode, frames, visibleText } from "./codec.mjs";
 import { MIN_COVER_GRAPHEMES, parseCoverPool, pickCover } from "./covers.mjs";
-import { PADDING, forgetKeys, warmKey } from "./envelope.mjs";
+import { PADDING, forgetKeys, open, seal, warmKey } from "./envelope.mjs";
 
 // Réexporté pour que le câblage Vencord n'ait qu'une seule couche en face de
 // lui : c'est la couche application qui expose ce dont l'interface a besoin.
-export { MIN_COVER_GRAPHEMES, PADDING, forgetKeys, parseCoverPool, warmKey };
-
-export const MODE = {
-    HIDDEN: "hidden",     // zero-width 3 bits/car (défaut)
-    HIDDEN_SAFE: "safe",  // zero-width 2 bits/car : 4 symboles seulement, le jeu
-    //                       le plus universellement préservé. Plus long.
-    COMPACT: "compact",   // sélecteurs de variation : 1 octet = 1 car, le plus court
-    EMOJI: "emoji"        // emojis visibles : lisiblement bizarre, messages courts
-};
-
-// Un mode = un encodeur et un décodeur, déclarés côte à côte. `detectMode` ne
-// distingue pas les deux densités zero-width (elle se déduit des symboles), donc
-// HIDDEN décode aussi HIDDEN_SAFE.
-const CODECS = {
-    [MODE.HIDDEN]: [(txt, pass, o) => encodeHidden(txt, pass, { ...o, bits: 3 }), decodeHidden],
-    [MODE.HIDDEN_SAFE]: [(txt, pass, o) => encodeHidden(txt, pass, { ...o, bits: 2 }), decodeHidden],
-    [MODE.COMPACT]: [encodeCompact, decodeCompact],
-    [MODE.EMOJI]: [encodeEmoji, decodeEmoji]
-};
+export { MIN_COVER_GRAPHEMES, MODE, PADDING, parseCoverPool, warmKey };
 
 export const DEFAULT_SEPARATOR = " | ";
 export const LOCK_PREFIX = "🔓 ";
@@ -88,11 +69,10 @@ export async function encodeOutgoing({
     const { cover, secret } = parseInput(raw, resolveSeparator(separator));
     // Le choix de la phrase affichée se fait ICI : c'est une décision de produit.
     // Le codec la reçoit toute faite et n'a pas à connaître le pool.
-    const encode = (CODECS[mode] ?? CODECS[MODE.HIDDEN])[0];
     let content;
     try {
-        content = await encode(secret, passphrase,
-            { cover: pickCover(cover ?? defaultCover, { pool }), context, padding });
+        content = encode(mode, await seal(secret, passphrase, context, padding),
+            pickCover(cover ?? defaultCover, { pool }));
     } catch (e) {
         // Une couverture trop courte n'est pas une panne de chiffrement : c'est
         // un réglage à corriger, et le message doit le dire.
@@ -115,38 +95,20 @@ export async function encodeOutgoing({
 // ===========================================================================
 // Réception
 // ===========================================================================
-// Pré-filtre : quel décodeur tenter, ou null si le message n'a clairement rien
-// à voir avec Alibi. Le payload étant dispersé dans la couverture, il n'y a
-// ni marqueur de début ni traînée à chercher : on compte les symboles présents.
-//
-// Ces seuils comptent deux fois :
-//   - à la réception, ils évitent de lancer un déchiffrement sur chaque message
-//     du salon (le scan d'un historique en traite des centaines) ;
-//   - à l'envoi, `isAlibiMessage` sert à ne pas re-chiffrer un message déjà
-//     chiffré. Un faux positif là-dessus enverrait le message EN CLAIR.
-// La plus petite trame possible fait 44 octets, soit 119 symboles invisibles en
-// densité 3 bits, 45 en mode compact, 90 emojis en mode emoji. Les seuils gardent
-// une marge sous ces minimums, tout en restant très au-dessus de ce qu'un humain
-// peut taper ou coller par accident. Le mode emoji, lui, produit une série
-// contiguë : c'est un run qu'on cherche, pour ne pas réagir à un simple 👍.
-const MIN_HIDDEN = 64;
-const MIN_COMPACT = 40;
-const MIN_EMOJI_RUN = 32;
-const STOP = Object.freeze({ hidden: MIN_HIDDEN, compact: MIN_COMPACT, emoji: MIN_EMOJI_RUN });
-
-export function detectMode(content) {
-    if (!content) return null;
-    // Un seul passage sur le message, avec sortie dès qu'un seuil est franchi.
-    const { hidden, compact, emojiRun } = scanSymbols(content, STOP);
-    if (hidden >= MIN_HIDDEN) return MODE.HIDDEN; // couvre aussi HIDDEN_SAFE
-    if (compact >= MIN_COMPACT) return MODE.COMPACT;
-    if (emojiRun >= MIN_EMOJI_RUN) return MODE.EMOJI;
-    return null;
-}
-
 // true si le message porte déjà un payload Alibi (ne pas le re-chiffrer).
 export function isAlibiMessage(content) {
     return detectMode(content) !== null;
+}
+
+// Essaie chaque trame que le mode `mode` peut lire dans le message. Le codec
+// propose, l'enveloppe tranche : elle écarte les longueurs impossibles sans
+// déchiffrer, donc en pratique une seule trame est vraiment essayée.
+export async function decodeAs(mode, content, passphrase, context = "") {
+    for (const frame of frames(mode, content)) {
+        const text = await open(frame, passphrase, context);
+        if (text != null) return text;
+    }
+    return null;
 }
 
 // Renvoie le texte clair, ou null si ce n'est pas pour nous / mauvaise clé.
@@ -156,7 +118,7 @@ export async function decodeIncoming({ content, passphrase, context = "" }) {
     const mode = detectMode(content);
     if (!mode) return null;
     try {
-        return await CODECS[mode][1](content, passphrase, { context });
+        return await decodeAs(mode, content, passphrase, context);
     } catch {
         return null;
     }
@@ -164,10 +126,6 @@ export async function decodeIncoming({ content, passphrase, context = "" }) {
 
 // Retire le marqueur ajouté à l'affichage, pour récupérer le clair d'origine
 // (nécessaire avant de re-chiffrer un message qu'on édite).
-//
-// Un message chiffré qu'on ne sait PAS lire n'est, lui, marqué par rien : un
-// signe à l'écran trahirait l'utilisateur devant un témoin ou un partage
-// d'écran. L'échec silencieux est un choix, pas un oubli.
 export function stripMarkers(content) {
     return content.startsWith(LOCK_PREFIX) ? content.slice(LOCK_PREFIX.length) : content;
 }
@@ -195,6 +153,70 @@ export class SeenCache {
             for (const k of this.map.keys()) { this.map.delete(k); if (--n === 0) break; }
         }
         this.map.set(id, content);
+    }
+}
+
+// ===========================================================================
+// Déchiffrement des messages affichés
+// ===========================================================================
+// Tout ce que le câblage Vencord doit retenir d'un message à l'autre, réuni ici
+// pour être testé : dédoublonnage, nouvel essai quand le mot de passe change,
+// et la liste des messages affichés en clair.
+export class Decryptor {
+    constructor() {
+        this.seen = new SeenCache();  // messageId -> contenu déjà traité
+        this.inFlight = new Set();    // déchiffrements en cours (anti-doublon)
+        this.passphrase = "";
+        // Messages dont le contenu affiché a été remplacé par le clair.
+        // Volontairement SANS limite de taille : oublier une entrée, c'est perdre
+        // la protection à l'édition sur un message dont le store contient le
+        // secret en clair. Ce ne sont que des identifiants.
+        this.decrypted = new Set();
+    }
+
+    // Renvoie le texte à afficher à la place du message, ou null s'il n'y a
+    // rien à remplacer.
+    //
+    // Un message chiffré qu'on ne sait PAS lire n'est, lui, marqué par rien : un
+    // signe à l'écran trahirait l'utilisateur devant un témoin ou un partage
+    // d'écran. L'échec silencieux est un choix, pas un oubli.
+    async read({ messageId, content, passphrase, context = "", showLock = true }) {
+        if (passphrase !== this.passphrase) {
+            this.passphrase = passphrase;
+            this.seen.clear(); // retenter tout le salon avec la nouvelle clé
+            forgetKeys();
+            // `decrypted` n'est PAS vidé : les messages déjà affichés en clair le
+            // restent, et leur édition doit continuer d'être interceptée.
+        }
+        if (!passphrase || !content) return null;
+        // Dédoublonnage AVANT le pré-filtre : un message déjà traité (échec
+        // compris, ou contenu déjà remplacé) ne relance ni la détection ni le
+        // déchiffrement.
+        if (this.inFlight.has(messageId) || this.seen.has(messageId, content)) return null;
+
+        this.inFlight.add(messageId);
+        try {
+            const text = await decodeIncoming({ content, passphrase, context });
+            this.seen.set(messageId, content);
+            if (text == null) return null;
+            const shown = showLock ? LOCK_PREFIX + text : text;
+            this.seen.set(messageId, shown); // le contenu remplacé ne repassera pas le filtre
+            this.decrypted.add(messageId);
+            return shown;
+        } finally {
+            this.inFlight.delete(messageId);
+        }
+    }
+
+    // true si ce message est affiché en clair : son édition doit être re-chiffrée.
+    wasDecrypted(messageId) {
+        return this.decrypted.has(messageId);
+    }
+
+    reset() {
+        this.seen.clear();
+        this.decrypted.clear();
+        forgetKeys(); // ne pas laisser traîner les clés dérivées
     }
 }
 

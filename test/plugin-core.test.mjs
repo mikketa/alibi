@@ -9,16 +9,16 @@ import {
     LOCK_PREFIX,
     MODE,
     AlibiError,
+    Decryptor,
     SeenCache,
     SendLedger,
     decodeIncoming,
-    detectMode,
     encodeOutgoing,
     isAlibiMessage,
     resolveSeparator,
     stripMarkers
 } from "../src/plugin-core.mjs";
-import { EMOJI, scanSymbols, visibleText } from "../src/codec.mjs";
+import { EMOJI, detectMode, scanSymbols, visibleText } from "../src/codec.mjs";
 import { CTX, OTHER_CTX, PASS, incompressible, visible } from "./helpers.mjs";
 
 const base = { passphrase: PASS, context: CTX };
@@ -207,6 +207,67 @@ test("SeenCache évince les plus anciens sans tout vider", () => {
     assert.equal(c.size, 7);            // 10 - 4 évincés + 1 nouveau
     assert.equal(c.has("0", "x"), false); // le plus ancien est parti
     assert.equal(c.has("9", "x"), true);  // le plus récent est resté
+});
+
+// --- Déchiffrement des messages affichés -----------------------------------
+// Ce que le câblage retient d'un message à l'autre. Vivait dans index.tsx, donc
+// n'était testé par rien — dont la liste qui protège l'édition des messages
+// affichés en clair.
+
+const lire = (d, messageId, content, opts = {}) =>
+    d.read({ messageId, content, passphrase: PASS, context: CTX, ...opts });
+
+test("Decryptor affiche le clair et retient que le message l'est", async () => {
+    const d = new Decryptor();
+    const content = await encodeOutgoing({ ...base, raw: "rdv 20h" });
+    assert.equal(await lire(d, "1", content), LOCK_PREFIX + "rdv 20h");
+    assert.equal(d.wasDecrypted("1"), true);
+    assert.equal(await lire(d, "2", content, { showLock: false }), "rdv 20h");
+});
+
+test("Decryptor ne retraite pas son propre remplacement", async () => {
+    const d = new Decryptor();
+    const content = await encodeOutgoing({ ...base, raw: "rdv 20h" });
+    const affiche = await lire(d, "1", content);
+    assert.equal(await lire(d, "1", affiche), null);
+    // Discord qui renvoie le contenu CHIFFRÉ (mise à jour serveur) écrase notre
+    // remplacement : il faut le redonner, sinon la couverture réapparaît.
+    assert.equal(await lire(d, "1", content), affiche);
+});
+
+test("Decryptor ne relance pas un échec déjà constaté", async () => {
+    const d = new Decryptor();
+    const etranger = await encodeOutgoing({ ...base, passphrase: "autre-mot-de-passe", raw: "x" });
+    assert.equal(await lire(d, "1", etranger), null);
+    // Mémorisé : un re-render ne relancera pas un déchiffrement voué à l'échec.
+    assert.equal(d.seen.has("1", etranger), true);
+});
+
+test("Decryptor ne marque rien sur un message ordinaire ou illisible", async () => {
+    const d = new Decryptor();
+    const etranger = await encodeOutgoing({ ...base, passphrase: "autre-mot-de-passe", raw: "x" });
+    assert.equal(await lire(d, "1", "salut ça va"), null);
+    assert.equal(await lire(d, "2", etranger), null);
+    assert.equal(d.wasDecrypted("1") || d.wasDecrypted("2"), false);
+});
+
+test("Decryptor retente un échec quand le mot de passe change", async () => {
+    const d = new Decryptor();
+    const content = await encodeOutgoing({ ...base, raw: "rdv 20h" });
+    assert.equal(await lire(d, "1", content, { passphrase: "mauvais" }), null);
+    assert.equal(await lire(d, "1", content, { passphrase: "mauvais" }), null);
+    assert.equal(await lire(d, "1", content), LOCK_PREFIX + "rdv 20h");
+});
+
+test("Decryptor garde la protection à l'édition malgré un changement de mot de passe", async () => {
+    // Le message reste affiché en clair dans Discord : l'éditer doit toujours
+    // le re-chiffrer, même si le mot de passe a changé entre-temps.
+    const d = new Decryptor();
+    await lire(d, "1", await encodeOutgoing({ ...base, raw: "rdv 20h" }));
+    await lire(d, "2", "salut", { passphrase: "nouveau-mot-de-passe" });
+    assert.equal(d.wasDecrypted("1"), true);
+    d.reset();
+    assert.equal(d.wasDecrypted("1"), false);
 });
 
 // --- Vérification de l'aller-retour Discord ---------------------------------

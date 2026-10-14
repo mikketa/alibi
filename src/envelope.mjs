@@ -22,7 +22,7 @@ const DOMAIN = "papotage-v4";  // sépare les versions de protocole ET les conte
 const ITER = 600_000;          // PBKDF2 aligné OWASP ; coût amorti par le cache de clé
 const NONCE_LEN = 12;          // = taille d'IV native de GCM, aucun remplissage
 const TAG_BITS = 128;          // tag complet : pas de troncature, pas de limite d'invocations
-export const PAD_BLOCK = 16;   // quantum de padding par défaut
+const PAD_BLOCK = 16;          // quantum de padding par défaut
 const FLAG_ZIPPED = 0x01;
 
 // Paliers du mode « longueur masquée ». Coûteux en place, mais la taille du
@@ -96,7 +96,7 @@ function unframe(padded) {
         if (padded[i] === 0x80 && i >= 1) return padded.subarray(0, i);
         break;
     }
-    throw new Error("padding invalide"); // fail-closed : l'appelant renverra null
+    throw new Error("padding invalide"); // fail-closed : `open` renverra null
 }
 
 // --- Dérivation de clé (PBKDF2 -> AES-GCM 256) ------------------------------
@@ -145,7 +145,7 @@ export function forgetKeys() {
 }
 
 // --- Sceller / ouvrir -------------------------------------------------------
-// Renvoie nonce || ciphertext || tag.
+// Renvoie la trame : nonce || ciphertext || tag.
 export async function seal(text, passphrase, context = "", padding = PADDING.BLOCK) {
     const key = await deriveKey(passphrase, context);
     const raw = ENC.encode(text);
@@ -162,27 +162,32 @@ export async function seal(text, passphrase, context = "", padding = PADDING.BLO
     return concat([nonce, new Uint8Array(ct)], NONCE_LEN + ct.byteLength);
 }
 
-// Lève si le tag est invalide (mauvaise clé, mauvais contexte, message étranger).
-export async function unseal(bytes, passphrase, context = "") {
-    if (bytes.length <= NONCE_LEN) throw new Error("trame trop courte");
-    const key = await deriveKey(passphrase, context);
-    const padded = new Uint8Array(await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: bytes.subarray(0, NONCE_LEN), tagLength: TAG_BITS },
-        key, bytes.subarray(NONCE_LEN)));
-    const inner = unframe(padded);
-    const body = inner.subarray(1);
-    return (inner[0] & FLAG_ZIPPED) === 0 ? DEC.decode(body) : DEC.decode(await inflate(body));
-}
-
-// --- Ce que le codec doit savoir d'une trame, sans en connaître le contenu ---
-export const FRAME_HEAD = NONCE_LEN + TAG_BITS / 8;
+// --- Ce qu'on sait d'une trame sans la déchiffrer ---------------------------
+const FRAME_HEAD = NONCE_LEN + TAG_BITS / 8;
 
 // La trame fait nonce(12) + ciphertext + tag(16), et GCM ne change pas la
 // taille : le ciphertext vaut exactement le clair rembourré, donc un multiple de
 // PAD_BLOCK. Toute longueur qui ne respecte pas ça ne peut pas être une trame
-// Alibi — on l'écarte sans lancer le moindre déchiffrement.
-export function plausibleFrame(len) {
-    return len >= FRAME_HEAD + PAD_BLOCK && (len - FRAME_HEAD) % PAD_BLOCK === 0;
+// Alibi — on l'écarte sans lancer le moindre déchiffrement. C'est ce qui permet
+// au codec de proposer plusieurs candidates sans connaître le format.
+const plausibleFrame = len => len >= FRAME_HEAD + PAD_BLOCK && (len - FRAME_HEAD) % PAD_BLOCK === 0;
+
+// Renvoie le texte clair, ou null : longueur impossible, mauvaise clé, mauvais
+// contexte, message d'un inconnu. Ne lève jamais — une trame illisible n'est
+// pas une exception, c'est à ça que ressemble tout message ordinaire d'un salon.
+export async function open(bytes, passphrase, context = "") {
+    if (!plausibleFrame(bytes.length)) return null;
+    try {
+        const key = await deriveKey(passphrase, context);
+        const padded = new Uint8Array(await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: bytes.subarray(0, NONCE_LEN), tagLength: TAG_BITS },
+            key, bytes.subarray(NONCE_LEN)));
+        const inner = unframe(padded);
+        const body = inner.subarray(1);
+        return (inner[0] & FLAG_ZIPPED) === 0 ? DEC.decode(body) : DEC.decode(await inflate(body));
+    } catch {
+        return null;
+    }
 }
 
 // Nombre MINIMAL d'octets envoyés pour un secret de `n` octets utiles. La taille

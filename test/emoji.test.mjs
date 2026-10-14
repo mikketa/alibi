@@ -3,8 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { decodeEmoji, encodeEmoji } from "../src/codec.mjs";
-import { CTX, PASS } from "./helpers.mjs";
+import { CTX, PASS, decodeEmoji, encodeEmoji } from "./helpers.mjs";
 
 test("aller-retour simple", async () => {
     const clair = "rdv 20h";

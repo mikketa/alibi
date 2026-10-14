@@ -3,8 +3,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { decodeCompact, decodeHidden, encodeCompact, encodeHidden } from "../src/codec.mjs";
-import { COVER, CTX, PASS, incompressible, invisibleCount, visible } from "./helpers.mjs";
+import {
+    COVER, CTX, PASS, decodeCompact, decodeHidden, encodeCompact, encodeHidden, incompressible, invisibleCount, visible
+} from "./helpers.mjs";
 
 test("le texte visible est exactement la couverture", async () => {
     const cover = "ouais on se voit demain à 15h";

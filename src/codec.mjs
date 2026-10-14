@@ -1,9 +1,10 @@
-// Encodages d'Alibi : transforme des octets scellés en caractères que
-// Discord transporte sans les afficher, et l'inverse.
+// Encodages d'Alibi : transforme une trame scellée en caractères que Discord
+// transporte sans les afficher, et l'inverse.
 //
-// Ce module ne chiffre rien — voir `envelope.mjs` — et ne choisit pas ce que dit
-// la phrase de couverture : elle lui est fournie. Il ne connaît que des octets,
-// des graphèmes et trois alphabets.
+// Ce module ne chiffre rien et ne sait pas ce qu'est une trame valide — c'est
+// `envelope.mjs` —, et ne choisit pas ce que dit la phrase de couverture : elle
+// lui est fournie. Il ne connaît que des octets, des graphèmes et trois
+// alphabets, et tout y est synchrone. `plugin-core.mjs` assemble les deux.
 //
 // Rien de constant n'annonce le payload : ni marqueur de début, ni en-tête de
 // densité, ni octet de repère, et il ne touche ni le premier ni le dernier
@@ -15,8 +16,13 @@
 // scanner qui COMPTE les caractères invisibles d'un message les trouvera
 // toujours. Ce qui change, c'est qu'il faut le faire exprès. `npm run audit`
 // vérifie sur 600 messages par mode qu'aucune régularité facile n'est revenue.
+//
+// Chaque mode a deux faces :
+//   - `encode(trame, couverture)` -> le message à envoyer ;
+//   - `frames(message)` -> les trames candidates qu'il pourrait porter. Le
+//     décodage ne sait pas les valider : c'est l'enveloppe qui tranche, en
+//     écartant d'abord sans rien déchiffrer toute longueur impossible.
 
-import { FRAME_HEAD, PAD_BLOCK, plausibleFrame, seal, unseal } from "./envelope.mjs";
 import { graphemes } from "./graphemes.mjs";
 import { randomInt } from "./random.mjs";
 
@@ -234,12 +240,11 @@ function coverGraphemes(cover) {
 // ===========================================================================
 // `bits` = 2 (sûr, 4 symboles) ou 3 (dense, 8 symboles). Le flux d'octets est
 // ré-empaqueté en groupes de `bits` bits (pas d'alignement octet requis).
-export async function encodeHidden(text, passphrase, { cover, bits = 3, context = "", padding } = {}) {
-    const bytes = await seal(text, passphrase, context, padding);
+function encodeZeroWidth(frame, cover, bits) {
     const mask = (1 << bits) - 1;
     const syms = [];
     let acc = 0, accBits = 0;
-    for (const byte of bytes) {
+    for (const byte of frame) {
         acc = (acc << 8) | byte;
         accBits += 8;
         while (accBits >= bits) {
@@ -271,28 +276,15 @@ function unpackBits(syms, bits) {
     return n ? bytes.subarray(0, n) : null; // bits restants = padding
 }
 
-// Ouvre une trame candidate, ou null : mauvaise clé, mauvais contexte, message
-// d'un inconnu, longueur impossible. Les trois décodeurs s'en servent — un
-// message illisible n'est jamais une exception, c'est le cas courant.
-async function open(bytes, passphrase, context) {
-    if (!plausibleFrame(bytes.length)) return null;
-    try {
-        return await unseal(bytes, passphrase, context);
-    } catch {
-        return null;
-    }
-}
-
-// Renvoie le texte clair, ou null si pas de payload / mauvaise clé / mauvais
-// contexte. Les symboles sont ramassés dans l'ordre du texte, où qu'ils soient :
-// aucun marqueur de début n'est nécessaire, et du texte ajouté après coup
-// (message édité, signature de bot) ne gêne pas.
+// Les symboles sont ramassés dans l'ordre du texte, où qu'ils soient : aucun
+// marqueur de début n'est nécessaire, et du texte ajouté après coup (message
+// édité, signature de bot) ne gêne pas.
 //
 // La densité se déduit au lieu d'être annoncée : un symbole >= 4 ne peut venir
 // que de l'alphabet 3 bits. Un payload 3 bits fait au moins 118 symboles tirés
 // uniformément sur 8 valeurs, donc la probabilité qu'aucun n'atteigne 4 est de
 // 2^-118 — en pratique une seule densité est jamais essayée.
-export async function decodeHidden(message, passphrase, { context = "" } = {}) {
+function* zeroWidthFrames(message) {
     const syms = [];
     let max = 0;
     for (let i = 0; i < message.length; i++) {
@@ -302,13 +294,11 @@ export async function decodeHidden(message, passphrase, { context = "" } = {}) {
             if (v > max) max = v;
         }
     }
-    if (syms.length < 8) return null;
+    if (syms.length < 8) return;
     for (const bits of max >= 4 ? [3] : [2, 3]) { // >= 4 : forcément l'alphabet 3 bits
         const bytes = unpackBits(syms, bits);
-        const texte = bytes && await open(bytes, passphrase, context);
-        if (texte != null) return texte;
+        if (bytes) yield bytes;
     }
-    return null;
 }
 
 // ===========================================================================
@@ -320,23 +310,25 @@ export async function decodeHidden(message, passphrase, { context = "" } = {}) {
 // ===========================================================================
 const HAS_VS = /[\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}]/u;
 
-// Décalage maximal admis entre le début des sélecteurs et celui de la trame :
-// ceux que la couverture porte légitimement (❤️, drapeaux) précèdent les nôtres.
+// Nombre maximal de sélecteurs que la couverture peut porter légitimement (❤️,
+// drapeaux) devant les nôtres. Il reste sous la granularité de padding de
+// l'enveloppe (16 octets) : parmi les décalages proposés, un seul donne une
+// longueur de trame possible, donc un seul déchiffrement est tenté, y compris
+// pour rejeter un message qui n'est pas pour nous.
 const MAX_SKEW = 8;
 
 // Indice du premier graphème après lequel poser le payload : juste derrière le
 // dernier graphème de la couverture qui porte déjà un sélecteur. Ceux de « ❤️ »
 // ou « 🏳️‍🌈 » se retrouvent ainsi tous avant la trame, donc absorbés par le
-// décalage calculé au décodage — la couverture garde son rendu exact.
+// décalage au décodage — la couverture garde son rendu exact.
 function firstFreeSlot(gs) {
     let at = 0;
     for (let i = 0; i < gs.length; i++) if (HAS_VS.test(gs[i])) at = i + 1;
     return at;
 }
 
-export async function encodeCompact(text, passphrase, { cover, context = "", padding } = {}) {
-    const body = await seal(text, passphrase, context, padding);
-    const syms = Array.from(body, vsChar);
+function encodeVariation(frame, cover) {
+    const syms = Array.from(frame, vsChar);
     // Le balayage des graphèmes ne sert que si la couverture porte vraiment un
     // sélecteur — un test d'expression régulière coûte 0,03 µs contre 20 µs de
     // segmentation (mesuré), et le cas courant est « aucun ».
@@ -352,12 +344,7 @@ export async function encodeCompact(text, passphrase, { cover, context = "", pad
     return scatter(gs, syms, from);
 }
 
-// Renvoie le texte clair, ou null. Sans marqueur de départ, le décalage ne
-// s'essaie pas : il se CALCULE. La trame ayant une longueur congrue à 0 modulo
-// PAD_BLOCK une fois l'en-tête retiré, et le décalage restant sous PAD_BLOCK,
-// une seule valeur est possible — donc un seul déchiffrement, y compris pour
-// rejeter un message qui n'est pas pour nous.
-export async function decodeCompact(message, passphrase, { context = "" } = {}) {
+function* variationFrames(message) {
     const bytes = [];
     for (let i = 0; i < message.length; i++) {
         const c = message.charCodeAt(i);
@@ -366,9 +353,8 @@ export async function decodeCompact(message, passphrase, { context = "" } = {}) 
         if (v >= 0) bytes.push(v);
         if (cp >= 0) i++;
     }
-    const skew = ((bytes.length - FRAME_HEAD) % PAD_BLOCK + PAD_BLOCK) % PAD_BLOCK;
-    if (skew > MAX_SKEW) return null;
-    return open(new Uint8Array(bytes.slice(skew)), passphrase, context);
+    const all = Uint8Array.from(bytes);
+    for (let skew = 0; skew <= MAX_SKEW && skew < all.length; skew++) yield all.subarray(skew);
 }
 
 // ===========================================================================
@@ -382,15 +368,14 @@ export async function decodeCompact(message, passphrase, { context = "" } = {}) 
 const EMOJI_MAGIC = 0xc7;
 const ATTEMPT_CAP = 32; // borne le travail sur une entrée hostile
 
-export async function encodeEmoji(text, passphrase, { cover, context = "", padding } = {}) {
-    const body = await seal(text, passphrase, context, padding);
+function encodeEmojiRun(frame, cover) {
     let seq = "";
-    for (const b of [EMOJI_MAGIC, ...body]) seq += EMOJI[b >> 4] + EMOJI[b & 0x0f];
+    for (const b of [EMOJI_MAGIC, ...frame]) seq += EMOJI[b >> 4] + EMOJI[b & 0x0f];
     // La couverture est optionnelle ici : la traînée d'emojis est déjà le message.
     return (cover && cover.trim() ? cover.trim() + " " : "") + seq;
 }
 
-export async function decodeEmoji(message, passphrase, { context = "" } = {}) {
+function* emojiFrames(message) {
     const nibbles = [];
     for (let i = 0; i < message.length; i++) {
         const c = message.charCodeAt(i);
@@ -407,10 +392,69 @@ export async function decodeEmoji(message, passphrase, { context = "" } = {}) {
         const bytes = [];
         for (let i = off; i + 1 < nibbles.length; i += 2) bytes.push((nibbles[i] << 4) | nibbles[i + 1]);
         for (let s = bytes.indexOf(EMOJI_MAGIC); s >= 0; s = bytes.indexOf(EMOJI_MAGIC, s + 1)) {
-            if (++tries > ATTEMPT_CAP) return null;
-            const texte = await open(new Uint8Array(bytes.slice(s + 1)), passphrase, context);
-            if (texte != null) return texte; // sinon : MAGIC suivant, autre alignement
+            if (++tries > ATTEMPT_CAP) return;
+            yield Uint8Array.from(bytes.slice(s + 1));
         }
     }
+}
+
+// ===========================================================================
+// Modes
+// ===========================================================================
+export const MODE = {
+    HIDDEN: "hidden",     // zero-width 3 bits/car (défaut)
+    HIDDEN_SAFE: "safe",  // zero-width 2 bits/car : 4 symboles seulement, le jeu
+    //                       le plus universellement préservé. Plus long.
+    COMPACT: "compact",   // sélecteurs de variation : 1 octet = 1 car, le plus court
+    EMOJI: "emoji"        // emojis visibles : lisiblement bizarre, messages courts
+};
+
+// HIDDEN et HIDDEN_SAFE partagent leur décodage : la densité se déduit des
+// symboles, donc `detectMode` ne les distingue pas.
+const CODECS = {
+    [MODE.HIDDEN]: { encode: (frame, cover) => encodeZeroWidth(frame, cover, 3), frames: zeroWidthFrames },
+    [MODE.HIDDEN_SAFE]: { encode: (frame, cover) => encodeZeroWidth(frame, cover, 2), frames: zeroWidthFrames },
+    [MODE.COMPACT]: { encode: encodeVariation, frames: variationFrames },
+    [MODE.EMOJI]: { encode: encodeEmojiRun, frames: emojiFrames }
+};
+
+// Un réglage de mode inconnu retombe sur le défaut plutôt que de bloquer l'envoi.
+const codecFor = mode => CODECS[mode] ?? CODECS[MODE.HIDDEN];
+
+// Lève une RangeError si la couverture n'offre aucune position où disperser.
+export function encode(mode, frame, cover) {
+    return codecFor(mode).encode(frame, cover);
+}
+
+export function frames(mode, message) {
+    return codecFor(mode).frames(message);
+}
+
+// Pré-filtre : quel mode a pu produire ce message, ou null s'il n'a clairement
+// rien à voir avec Alibi. Le payload étant dispersé dans la couverture, il n'y a
+// ni marqueur de début ni traînée à chercher : on compte les symboles présents.
+//
+// Ces seuils comptent deux fois :
+//   - à la réception, ils évitent de lancer un déchiffrement sur chaque message
+//     du salon (le scan d'un historique en traite des centaines) ;
+//   - à l'envoi, ils empêchent de re-chiffrer un message déjà chiffré. Un faux
+//     positif là-dessus enverrait le message EN CLAIR.
+// La plus petite trame possible fait 44 octets, soit 119 symboles invisibles en
+// densité 3 bits, 45 en mode compact, 90 emojis en mode emoji. Les seuils gardent
+// une marge sous ces minimums, tout en restant très au-dessus de ce qu'un humain
+// peut taper ou coller par accident. Le mode emoji, lui, produit une série
+// contiguë : c'est un run qu'on cherche, pour ne pas réagir à un simple 👍.
+const MIN_HIDDEN = 64;
+const MIN_COMPACT = 40;
+const MIN_EMOJI_RUN = 32;
+const STOP = Object.freeze({ hidden: MIN_HIDDEN, compact: MIN_COMPACT, emoji: MIN_EMOJI_RUN });
+
+export function detectMode(message) {
+    if (!message) return null;
+    // Un seul passage sur le message, avec sortie dès qu'un seuil est franchi.
+    const { hidden, compact, emojiRun } = scanSymbols(message, STOP);
+    if (hidden >= MIN_HIDDEN) return MODE.HIDDEN; // couvre aussi HIDDEN_SAFE
+    if (compact >= MIN_COMPACT) return MODE.COMPACT;
+    if (emojiRun >= MIN_EMOJI_RUN) return MODE.EMOJI;
     return null;
 }

@@ -1,5 +1,9 @@
 // Outils partagés par les suites de test.
 
+import { MODE, encode } from "../src/codec.mjs";
+import { seal } from "../src/envelope.mjs";
+import { decodeAs } from "../src/plugin-core.mjs";
+
 export const PASS = "motdepasse-secret";
 export const COVER = "ouais je te suis là-dessus"; // couverture fixe pour les tests
 export const CTX = "123456789012345678";      // identifiant de salon fictif
@@ -75,3 +79,19 @@ export function isSubsequence(needle, hay) {
 export const ZW_SYMBOLS = [
     "\u200b", "\u200c", "\u200d", "\u2060", "\u2061", "\u2062", "\u2063", "\u2064"
 ];
+
+// Chiffrer puis encoder, comme le fait `encodeOutgoing`, mais avec un mode et
+// une couverture imposés : les suites par mode observent ainsi de vrais
+// messages, sans le tirage de couverture ni le pré-filtre du plugin.
+async function sealAndEncode(mode, text, pass, { cover, context = "", padding } = {}) {
+    return encode(mode, await seal(text, pass, context, padding), cover);
+}
+
+export const encodeHidden = (text, pass, { bits = 3, ...opts } = {}) =>
+    sealAndEncode(bits === 2 ? MODE.HIDDEN_SAFE : MODE.HIDDEN, text, pass, opts);
+export const encodeCompact = (text, pass, opts) => sealAndEncode(MODE.COMPACT, text, pass, opts);
+export const encodeEmoji = (text, pass, opts) => sealAndEncode(MODE.EMOJI, text, pass, opts);
+
+export const decodeHidden = (msg, pass, { context = "" } = {}) => decodeAs(MODE.HIDDEN, msg, pass, context);
+export const decodeCompact = (msg, pass, { context = "" } = {}) => decodeAs(MODE.COMPACT, msg, pass, context);
+export const decodeEmoji = (msg, pass, { context = "" } = {}) => decodeAs(MODE.EMOJI, msg, pass, context);

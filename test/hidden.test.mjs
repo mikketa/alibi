@@ -3,8 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { decodeHidden, encodeHidden } from "../src/codec.mjs";
-import { COVER, CTX, PASS, invisibleCount, len, visible } from "./helpers.mjs";
+import { COVER, CTX, PASS, decodeHidden, encodeHidden, invisibleCount, len, visible } from "./helpers.mjs";
 
 test("aller-retour, et la partie visible se limite à la couverture", async () => {
     const clair = "rdv 20h au parc, dis rien à personne";

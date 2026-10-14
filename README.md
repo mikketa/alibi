@@ -142,7 +142,7 @@ Capacities are measured on random text, which compresses worst.
 Everything except the Vencord glue runs in plain Node, with no dependencies.
 
 ```bash
-npm test        # Node >= 20, 115 tests
+npm test        # Node >= 20, 121 tests
 npm run audit   # looks for detectable patterns in generated messages
 npm run bench   # performance measurements
 ```
@@ -153,10 +153,9 @@ enforces this dependency graph:
 ```
 index.tsx          Vencord wiring: lock button, send/edit hooks, toasts
   └─ plugin-core   send and receive rules
-       ├─ codec    bytes <-> invisible characters, scattering into the cover
-       │    └─ envelope   AES-GCM, key derivation, padding
-       ├─ covers   cover phrase generation
-       └─ envelope
+       ├─ codec      bytes <-> invisible characters, scattering into the cover
+       ├─ covers     cover phrase generation
+       └─ envelope   AES-GCM, key derivation, padding
 ```
 
 ## 📄 License

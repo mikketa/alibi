@@ -3,9 +3,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { decodeHidden, encodeHidden } from "../src/codec.mjs";
 import { wireSize, wireSizeMax } from "../src/envelope.mjs";
-import { COVER, CTX, PASS, incompressible, invisibleCount } from "./helpers.mjs";
+import { COVER, CTX, PASS, decodeHidden, encodeHidden, incompressible, invisibleCount } from "./helpers.mjs";
 
 // Message long et redondant, typique d'un vrai échange.
 const LONG = "on se retrouve demain à quatorze heures devant le lycée comme d'habitude, "

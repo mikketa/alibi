@@ -3,9 +3,9 @@
 // Sert à décider quoi optimiser sur des chiffres, et à vérifier après coup que
 // l'optimisation en était une.
 
-import { decodeHidden, encodeHidden } from "../src/codec.mjs";
-import { decodeIncoming, detectMode, encodeOutgoing } from "../src/plugin-core.mjs";
-import { CTX, PASS, incompressible } from "../test/helpers.mjs";
+import { detectMode } from "../src/codec.mjs";
+import { decodeIncoming, encodeOutgoing } from "../src/plugin-core.mjs";
+import { CTX, PASS, decodeHidden, encodeHidden, incompressible } from "../test/helpers.mjs";
 
 const base = { passphrase: PASS, context: CTX };
 

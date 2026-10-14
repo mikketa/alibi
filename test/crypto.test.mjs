@@ -5,9 +5,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { decodeCompact, encodeCompact } from "../src/codec.mjs";
 import { wireSize, wireSizeMax } from "../src/envelope.mjs";
-import { COVER, CTX, OTHER_CTX, PASS, incompressible, invisibleCount } from "./helpers.mjs";
+import { COVER, CTX, OTHER_CTX, PASS, decodeCompact, encodeCompact, incompressible, invisibleCount } from "./helpers.mjs";
 
 // Octets réellement envoyés pour un secret donné. Le mode compact code un octet
 // par caractère invisible, et sa trame n'a plus d'octet de repère depuis la v4.
