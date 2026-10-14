@@ -1,7 +1,7 @@
 {
-    "name": "papotage",
+    "name": "alibi",
     "version": "4.1.0",
-    "description": "Vencord plugin that encrypts Discord messages and hides them in invisible text or emojis.",
+    "description": "Vencord plugin that encrypts Discord messages and hides them as invisible characters inside ordinary-looking phrases.",
     "type": "module",
     "engines": {
         "node": ">=20"
@@ -15,6 +15,6 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/mikketa/papotage"
+        "url": "https://github.com/mikketa/alibi"
     }
 }

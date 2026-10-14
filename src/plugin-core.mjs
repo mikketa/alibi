@@ -45,10 +45,10 @@ export function resolveSeparator(sep) {
     return sep && sep.trim() ? sep : DEFAULT_SEPARATOR;
 }
 
-export class PapotageError extends Error {
+export class AlibiError extends Error {
     constructor(code, message) {
         super(message);
-        this.name = "PapotageError";
+        this.name = "AlibiError";
         this.code = code;
     }
 }
@@ -74,16 +74,16 @@ function parseInput(raw, separator) {
 // ===========================================================================
 // Envoi
 // ===========================================================================
-// Renvoie le message prêt à envoyer. Lève une PapotageError sur TOUT problème :
+// Renvoie le message prêt à envoyer. Lève une AlibiError sur TOUT problème :
 // l'appelant doit annuler l'envoi. C'est le point le plus important du plugin —
 // un échec silencieux ici publie le message en clair.
 export async function encodeOutgoing({
     raw, passphrase, mode = MODE.HIDDEN, defaultCover = "", separator = DEFAULT_SEPARATOR,
     context = "", maxChars = MAX_MESSAGE_CHARS, padding = PADDING.BLOCK, pool = []
 }) {
-    if (!passphrase) throw new PapotageError("no-passphrase",
-        "Papotage : aucun mot de passe défini. Message NON envoyé (il serait parti en clair).");
-    if (!raw || !raw.trim()) throw new PapotageError("empty", "Papotage : message vide.");
+    if (!passphrase) throw new AlibiError("no-passphrase",
+        "Alibi : aucun mot de passe défini. Message NON envoyé (il serait parti en clair).");
+    if (!raw || !raw.trim()) throw new AlibiError("empty", "Alibi : message vide.");
 
     const { cover, secret } = parseInput(raw, resolveSeparator(separator));
     // Le choix de la phrase affichée se fait ICI : c'est une décision de produit.
@@ -97,16 +97,16 @@ export async function encodeOutgoing({
         // Une couverture trop courte n'est pas une panne de chiffrement : c'est
         // un réglage à corriger, et le message doit le dire.
         if (e instanceof RangeError || e instanceof TypeError) {
-            throw new PapotageError("cover-too-short", `${e.message} Message NON envoyé.`);
+            throw new AlibiError("cover-too-short", `${e.message} Message NON envoyé.`);
         }
-        throw new PapotageError("encode-failed",
-            `Papotage : échec du chiffrement (${e?.message ?? e}). Message NON envoyé.`);
+        throw new AlibiError("encode-failed",
+            `Alibi : échec du chiffrement (${e?.message ?? e}). Message NON envoyé.`);
     }
 
     // Discord rejette silencieusement au-delà de 2000 : mieux vaut annuler avec
     // une explication que laisser le message disparaître sans rien dire.
-    if (content.length > maxChars) throw new PapotageError("too-long",
-        `Papotage : message trop long de ${content.length - maxChars} caractères une fois chiffré `
+    if (content.length > maxChars) throw new AlibiError("too-long",
+        `Alibi : message trop long de ${content.length - maxChars} caractères une fois chiffré `
         + `(${content.length} / ${maxChars}). Coupe-le en deux`
         + (mode === MODE.HIDDEN ? " ou passe en mode compact." : "."));
     return content;
@@ -116,13 +116,13 @@ export async function encodeOutgoing({
 // Réception
 // ===========================================================================
 // Pré-filtre : quel décodeur tenter, ou null si le message n'a clairement rien
-// à voir avec Papotage. Le payload étant dispersé dans la couverture, il n'y a
+// à voir avec Alibi. Le payload étant dispersé dans la couverture, il n'y a
 // ni marqueur de début ni traînée à chercher : on compte les symboles présents.
 //
 // Ces seuils comptent deux fois :
 //   - à la réception, ils évitent de lancer un déchiffrement sur chaque message
 //     du salon (le scan d'un historique en traite des centaines) ;
-//   - à l'envoi, `isPapotageMessage` sert à ne pas re-chiffrer un message déjà
+//   - à l'envoi, `isAlibiMessage` sert à ne pas re-chiffrer un message déjà
 //     chiffré. Un faux positif là-dessus enverrait le message EN CLAIR.
 // La plus petite trame possible fait 44 octets, soit 119 symboles invisibles en
 // densité 3 bits, 45 en mode compact, 90 emojis en mode emoji. Les seuils gardent
@@ -144,8 +144,8 @@ export function detectMode(content) {
     return null;
 }
 
-// true si le message porte déjà un payload Papotage (ne pas le re-chiffrer).
-export function isPapotageMessage(content) {
+// true si le message porte déjà un payload Alibi (ne pas le re-chiffrer).
+export function isAlibiMessage(content) {
     return detectMode(content) !== null;
 }
 

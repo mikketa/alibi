@@ -1,4 +1,4 @@
-// Enveloppe cryptographique de Papotage — la partie qu'il faut relire seule.
+// Enveloppe cryptographique de Alibi — la partie qu'il faut relire seule.
 //
 // Ce module ne sait rien d'Unicode, de caractères invisibles ni de Discord : il
 // transforme un texte en octets scellés, et l'inverse. Il est séparé du codec
@@ -16,6 +16,8 @@ import { randomInt } from "./random.mjs";
 const ENC = new TextEncoder();
 const DEC = new TextDecoder();
 
+// Garde l'ancien nom du plugin : il entre dans le sel, le renommer rendrait
+// illisibles tous les messages déjà envoyés.
 const DOMAIN = "papotage-v4";  // sépare les versions de protocole ET les contextes
 const ITER = 600_000;          // PBKDF2 aligné OWASP ; coût amorti par le cache de clé
 const NONCE_LEN = 12;          // = taille d'IV native de GCM, aucun remplissage
@@ -180,7 +182,7 @@ export const FRAME_HEAD = NONCE_LEN + TAG_BITS / 8;
 // La trame fait nonce(12) + ciphertext + tag(16), et GCM ne change pas la
 // taille : le ciphertext vaut exactement le clair rembourré, donc un multiple de
 // PAD_BLOCK. Toute longueur qui ne respecte pas ça ne peut pas être une trame
-// Papotage — on l'écarte sans lancer le moindre déchiffrement.
+// Alibi — on l'écarte sans lancer le moindre déchiffrement.
 export function plausibleFrame(len) {
     return len >= FRAME_HEAD + PAD_BLOCK && (len - FRAME_HEAD) % PAD_BLOCK === 0;
 }

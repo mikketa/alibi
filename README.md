@@ -1,13 +1,13 @@
 <div align="center">
 
-# Papotage
+# Alibi
 
 **Encrypted Discord messages that look like small talk.**
 
 A [Vencord](https://vencord.dev) plugin that encrypts what you type and hides
 the ciphertext as invisible characters inside an ordinary-looking phrase.
 
-[![CI](https://github.com/mikketa/papotage/actions/workflows/ci.yml/badge.svg)](https://github.com/mikketa/papotage/actions/workflows/ci.yml)
+[![CI](https://github.com/mikketa/alibi/actions/workflows/ci.yml/badge.svg)](https://github.com/mikketa/alibi/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)
 
@@ -42,12 +42,12 @@ zero-width characters scattered between the visible letters.
 
 ## 📦 Installation
 
-Papotage is a Vencord *user plugin*, so it is built from source.
+Alibi is a Vencord *user plugin*, so it is built from source.
 
-1. Copy the contents of `src/` into `Vencord/src/userplugins/papotage/`, so
+1. Copy the contents of `src/` into `Vencord/src/userplugins/alibi/`, so
    that `index.tsx` sits directly in that folder.
 2. Build Vencord with `pnpm build`.
-3. Enable **Papotage** in Vencord's plugin settings and set the passphrase.
+3. Enable **Alibi** in Vencord's plugin settings and set the passphrase.
 
 > [!TIP]
 > On **Vesktop**, point `vencordDir` in `state.json` at the build's `dist`
@@ -58,7 +58,7 @@ Papotage is a Vencord *user plugin*, so it is built from source.
 > [!IMPORTANT]
 > Everyone in the conversation must use the **same passphrase**. Share it
 > outside Discord, and make it at least 12 characters long: guessing the
-> passphrase is the most realistic way to break Papotage.
+> passphrase is the most realistic way to break Alibi.
 
 Turn encryption on or off per channel with the lock button in the message bar.
 **Right-click it to open the settings.**
@@ -79,7 +79,7 @@ With encryption on, type as usual and a random cover phrase is chosen for you.
 > ```
 
 > [!NOTE]
-> A Papotage message you can't decrypt just shows its cover, with no marker.
+> A Alibi message you can't decrypt just shows its cover, with no marker.
 > This is on purpose: a marker would give you away to anyone looking at your
 > screen.
 
@@ -124,7 +124,7 @@ Capacities are measured on random text, which compresses worst.
 >   when.
 > - **Hidden, not undetectable.** A person reading the chat sees nothing, but a
 >   script that counts invisible characters will notice them.
-> - **Not a replacement for Signal.** Papotage is a privacy tool for everyday
+> - **Not a replacement for Signal.** Alibi is a privacy tool for everyday
 >   use. It won't protect you from someone specifically targeting you.
 
 > [!CAUTION]

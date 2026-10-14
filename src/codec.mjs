@@ -1,4 +1,4 @@
-// Encodages de Papotage : transforme des octets scellés en caractères que
+// Encodages de Alibi : transforme des octets scellés en caractères que
 // Discord transporte sans les afficher, et l'inverse.
 //
 // Ce module ne chiffre rien — voir `envelope.mjs` — et ne choisit pas ce que dit
@@ -221,12 +221,12 @@ function scatter(gs, symbols, from = 0) {
 // que l'appelant ne les redécoupe pas.
 function coverGraphemes(cover) {
     if (typeof cover !== "string" || cover.length === 0) {
-        throw new TypeError("Papotage : une phrase de couverture est requise pour encoder.");
+        throw new TypeError("Alibi : une phrase de couverture est requise pour encoder.");
     }
     const gs = graphemes(cover);
     if (innerSlots(gs, 0) < 1) {
         throw new RangeError(
-            `Papotage : couverture trop courte pour dissimuler un message (« ${cover} »). `
+            `Alibi : couverture trop courte pour dissimuler un message (« ${cover} »). `
             + "Il faut au moins deux caractères visibles pour répartir la partie invisible.");
     }
     return gs;

@@ -1,5 +1,5 @@
 /*
- * Papotage — plugin Vencord.
+ * Alibi — plugin Vencord.
  * Chiffre les messages et cache le résultat : l'outsider voit une phrase banale
  * (ou des emojis), toi (avec le plugin + la clé) tu vois le vrai texte à la place.
  *
@@ -22,8 +22,8 @@ import definePlugin, { OptionType } from "@utils/types";
 import { FluxDispatcher, MessageStore, SelectedChannelStore, Toasts, UserStore, useState } from "@webpack/common";
 
 import {
-    decodeIncoming, encodeOutgoing, forgetKeys, isPapotageMessage, LOCK_PREFIX,
-    MIN_COVER_GRAPHEMES, MODE, PADDING, PapotageError, parseCoverPool,
+    decodeIncoming, encodeOutgoing, forgetKeys, isAlibiMessage, LOCK_PREFIX,
+    MIN_COVER_GRAPHEMES, MODE, PADDING, AlibiError, parseCoverPool,
     SeenCache, SendLedger, stripMarkers, warmKey
 } from "./plugin-core.mjs";
 
@@ -32,7 +32,7 @@ const settings = definePluginSettings({
         type: OptionType.STRING, default: "",
         description: "Mot de passe partagé (identique chez tous les participants)",
         // 600 000 itérations PBKDF2 ne rachètent pas un mot de passe de six
-        // caractères : c'est la façon la plus réaliste de casser Papotage.
+        // caractères : c'est la façon la plus réaliste de casser Alibi.
         isValid: (v: string) => !v || v.length >= 12
             || "Trop court : sous 12 caractères, le mot de passe se devine plus vite que le chiffrement ne se casse."
     },
@@ -118,7 +118,7 @@ function LockIcon({ on, height = 24, width = 24, className }: {
 }
 
 // --- Bouton dans la barre de message ----------------------------------------
-const PapotageButton: ChatBarButtonFactory = ({ channel, isMainChat }) => {
+const AlibiButton: ChatBarButtonFactory = ({ channel, isMainChat }) => {
     const [on, setOn] = useState(enabledChannels.has(channel.id));
     if (!isMainChat) return null;
 
@@ -133,15 +133,15 @@ const PapotageButton: ChatBarButtonFactory = ({ channel, isMainChat }) => {
         else {
             enabledChannels.add(channel.id);
             if (!settings.store.passphrase) {
-                toast(Toasts.Type.MESSAGE, "Papotage : définis un mot de passe dans les réglages du plugin.");
+                toast(Toasts.Type.MESSAGE, "Alibi : définis un mot de passe dans les réglages du plugin.");
             }
         }
         setOn(enabledChannels.has(channel.id));
     };
 
-    const state = !on ? "Papotage désactivé"
-        : armed ? "Papotage activé (messages chiffrés)"
-            : "Papotage armé mais SANS mot de passe — les envois seront bloqués";
+    const state = !on ? "Alibi désactivé"
+        : armed ? "Alibi activé (messages chiffrés)"
+            : "Alibi armé mais SANS mot de passe — les envois seront bloqués";
     // Le mot de passe se règle dans les réglages du plugin : un accès direct au
     // clic droit évite d'aller les chercher dans la liste des plugins Vencord.
     const tooltip = `${state} — clic droit : réglages`;
@@ -152,7 +152,7 @@ const PapotageButton: ChatBarButtonFactory = ({ channel, isMainChat }) => {
             onClick={toggle}
             onContextMenu={e => {
                 e.preventDefault(); // pas le menu natif : ouvrir les réglages du plugin
-                openPluginModal(plugins.Papotage);
+                openPluginModal(plugins.Alibi);
             }}
         >
             <div style={{ color, display: "flex" }}>
@@ -241,7 +241,7 @@ const onCreate = (e: any) => {
     try { isOwn = !!m.author?.id && m.author.id === UserStore.getCurrentUser()?.id; } catch { /* ignore */ }
     if (ledger.check(m.content, { isOwn }) === "altered") {
         toast(Toasts.Type.FAILURE,
-            "Papotage : Discord a modifié ton message en le publiant. "
+            "Alibi : Discord a modifié ton message en le publiant. "
             + "Le destinataire ne pourra pas le lire — essaie le mode « Invisible sûr ».");
     }
     decryptLater(m.channel_id, m.id, m.content);
@@ -280,7 +280,7 @@ let preEdit: any;
 let scanTimers: any[] = []; // timers de scan différés, à annuler au stop()
 
 export default definePlugin({
-    name: "Papotage",
+    name: "Alibi",
     description: "Chiffre tes messages et les cache dans du texte invisible ou des emojis : personne ne voit qu'ils sont chiffrés, toi tu les lis en clair.",
     authors: [{ name: "zefarie", id: 0n }],
     dependencies: ["ChatInputButtonAPI", "MessageEventsAPI", "MessageUpdaterAPI"],
@@ -298,13 +298,13 @@ export default definePlugin({
             try {
                 if (!enabledChannels.has(channelId)) return;
                 if (!msg.content) return;
-                if (isPapotageMessage(msg.content)) return; // déjà chiffré : ne pas ré-encoder
+                if (isAlibiMessage(msg.content)) return; // déjà chiffré : ne pas ré-encoder
 
                 msg.content = await encodeOutgoing({ ...encodeSettings(), raw: msg.content, context: channelId });
                 ledger.remember(msg.content);
             } catch (e) {
-                const m = e instanceof PapotageError ? e.message
-                    : `Papotage : échec inattendu (${(e as any)?.message ?? e}). Message NON envoyé.`;
+                const m = e instanceof AlibiError ? e.message
+                    : `Alibi : échec inattendu (${(e as any)?.message ?? e}). Message NON envoyé.`;
                 toast(Toasts.Type.FAILURE, m);
                 return { cancel: true };
             }
@@ -323,13 +323,13 @@ export default definePlugin({
                     ...encodeSettings(), raw: stripMarkers(msg.content), context: channelId
                 });
             } catch (e) {
-                const why = e instanceof PapotageError ? e.message : String((e as any)?.message ?? e);
-                toast(Toasts.Type.FAILURE, `Papotage : édition annulée, le texte serait parti en clair. ${why}`);
+                const why = e instanceof AlibiError ? e.message : String((e as any)?.message ?? e);
+                toast(Toasts.Type.FAILURE, `Alibi : édition annulée, le texte serait parti en clair. ${why}`);
                 return { cancel: true };
             }
         });
 
-        addChatBarButton("papotage", PapotageButton, props => <LockIcon on={false} {...props} />);
+        addChatBarButton("alibi", AlibiButton, props => <LockIcon on={false} {...props} />);
 
         for (const [event, handler] of Object.entries(FLUX_HANDLERS)) {
             FluxDispatcher.subscribe(event, handler);
@@ -343,7 +343,7 @@ export default definePlugin({
     stop() {
         removeMessagePreSendListener(preSend);
         removeMessagePreEditListener(preEdit);
-        removeChatBarButton("papotage");
+        removeChatBarButton("alibi");
         scanTimers.forEach(clearTimeout);
         scanTimers = [];
         for (const [event, handler] of Object.entries(FLUX_HANDLERS)) {

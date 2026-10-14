@@ -26,7 +26,7 @@ async function benchAsync(label, iterations, fn) {
     return ms;
 }
 
-// Un salon réaliste : une poignée de messages Papotage noyés dans du bavardage.
+// Un salon réaliste : une poignée de messages Alibi noyés dans du bavardage.
 const chatter = [
     "salut ça va ?", "mdr", "ouais je suis d'accord", "👍", "```js\nconst a = 1;\n```",
     "j'arrive dans 5 min", "regarde ❤️ c'est mignon", "trop drôle 😂😂🔥",
@@ -38,7 +38,7 @@ const encoded = await encodeOutgoing({ ...base, raw: "rendez-vous à 20h au parc
 const longNormal = "lorem ipsum dolor sit amet ".repeat(70); // ~1900 car., message bavard
 bench("detectMode sur un message ordinaire court", 200_000, i => detectMode(chatter[i % chatter.length]));
 bench("detectMode sur un message ordinaire long (1900 car.)", 20_000, () => detectMode(longNormal));
-bench("detectMode sur un message Papotage", 50_000, () => detectMode(encoded));
+bench("detectMode sur un message Alibi", 50_000, () => detectMode(encoded));
 
 console.log("\n=== Scan d'un salon : 500 messages dont 5 % chiffrés ===");
 const channel = Array.from({ length: 500 }, (_, i) =>

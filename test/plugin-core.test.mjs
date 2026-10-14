@@ -8,13 +8,13 @@ import {
     DEFAULT_SEPARATOR,
     LOCK_PREFIX,
     MODE,
-    PapotageError,
+    AlibiError,
     SeenCache,
     SendLedger,
     decodeIncoming,
     detectMode,
     encodeOutgoing,
-    isPapotageMessage,
+    isAlibiMessage,
     resolveSeparator,
     stripMarkers
 } from "../src/plugin-core.mjs";
@@ -25,7 +25,7 @@ const base = { passphrase: PASS, context: CTX };
 
 async function expectError(code, fn) {
     await assert.rejects(fn, e => {
-        assert.ok(e instanceof PapotageError, `type inattendu : ${e?.name}`);
+        assert.ok(e instanceof AlibiError, `type inattendu : ${e?.name}`);
         assert.equal(e.code, code);
         return true;
     });
@@ -79,7 +79,7 @@ for (const mode of Object.values(MODE)) {
 
     test(`le mode ${mode} est reconnu par le pré-filtre`, async () => {
         const content = await encodeOutgoing({ ...base, raw: "secret un peu long pour remplir", mode });
-        assert.ok(isPapotageMessage(content), `non détecté : ${JSON.stringify(content.slice(0, 40))}`);
+        assert.ok(isAlibiMessage(content), `non détecté : ${JSON.stringify(content.slice(0, 40))}`);
     });
 }
 
@@ -140,7 +140,7 @@ test("les messages ordinaires ne déclenchent aucun déchiffrement", async () =>
 });
 
 test("un caractère invisible isolé ne fait pas passer un message pour chiffré", async () => {
-    // Point critique côté ENVOI : isPapotageMessage() décide de ne pas
+    // Point critique côté ENVOI : isAlibiMessage() décide de ne pas
     // re-chiffrer. Un faux positif ici enverrait le message en clair. Un
     // word-joiner ou un sélecteur de variation collé depuis une page web ne doit
     // donc jamais suffire.
@@ -152,7 +152,7 @@ test("un caractère invisible isolé ne fait pas passer un message pour chiffré
         "a️b️c️"
     ];
     for (const content of pieges) {
-        assert.equal(isPapotageMessage(content), false, `faux positif sur ${JSON.stringify(content)}`);
+        assert.equal(isAlibiMessage(content), false, `faux positif sur ${JSON.stringify(content)}`);
     }
 });
 
@@ -161,7 +161,7 @@ test("un message réellement chiffré est bien reconnu comme tel", async () => {
     // chiffré à chaque édition.
     for (const mode of Object.values(MODE)) {
         const content = await encodeOutgoing({ ...base, raw: "x", mode });
-        assert.equal(isPapotageMessage(content), true, `mode ${mode}`);
+        assert.equal(isAlibiMessage(content), true, `mode ${mode}`);
     }
 });
 
@@ -349,19 +349,19 @@ test("un message chiffré avec une autre clé ne laisse aucune trace visible", a
     for (const mode of Object.values(MODE)) {
         const content = await encodeOutgoing({ ...base, raw: "message manqué", mode });
         assert.equal(await decodeIncoming({ content, passphrase: "autre-mot-de-passe", context: CTX }), null);
-        assert.ok(isPapotageMessage(content), `mode ${mode} : payload non reconnu`);
+        assert.ok(isAlibiMessage(content), `mode ${mode} : payload non reconnu`);
     }
 });
 
 test("un message d'un autre salon est reconnu comme chiffré mais illisible", async () => {
     const content = await encodeOutgoing({ ...base, raw: "secret" });
     assert.equal(await decodeIncoming({ content, passphrase: PASS, context: OTHER_CTX }), null);
-    assert.ok(isPapotageMessage(content));
+    assert.ok(isAlibiMessage(content));
 });
 
 test("un message ordinaire n'est jamais pris pour un message chiffré", async () => {
     // Un faux positif ici ferait sauter le chiffrement à l'envoi.
     for (const content of ["salut ça va ?", "👍", "regarde ❤️ c'est mignon", "ok ça marche 👍"]) {
-        assert.equal(isPapotageMessage(content), false, `faux positif sur ${JSON.stringify(content)}`);
+        assert.equal(isAlibiMessage(content), false, `faux positif sur ${JSON.stringify(content)}`);
     }
 });
