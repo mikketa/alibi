@@ -37,7 +37,7 @@ const CODECS = {
 
 export const DEFAULT_SEPARATOR = " | ";
 export const LOCK_PREFIX = "🔓 ";
-export const MAX_MESSAGE_CHARS = 2000; // limite Discord
+const MAX_MESSAGE_CHARS = 2000; // limite Discord
 
 // Un séparateur vide ou fait uniquement d'espaces découperait tous les messages
 // normaux : on retombe sur la valeur par défaut dans ce cas.
@@ -79,7 +79,7 @@ function parseInput(raw, separator) {
 // un échec silencieux ici publie le message en clair.
 export async function encodeOutgoing({
     raw, passphrase, mode = MODE.HIDDEN, defaultCover = "", separator = DEFAULT_SEPARATOR,
-    context = "", maxChars = MAX_MESSAGE_CHARS, padding = PADDING.BLOCK, pool = []
+    context = "", padding = PADDING.BLOCK, pool = []
 }) {
     if (!passphrase) throw new AlibiError("no-passphrase",
         "Alibi : aucun mot de passe défini. Message NON envoyé (il serait parti en clair).");
@@ -96,7 +96,7 @@ export async function encodeOutgoing({
     } catch (e) {
         // Une couverture trop courte n'est pas une panne de chiffrement : c'est
         // un réglage à corriger, et le message doit le dire.
-        if (e instanceof RangeError || e instanceof TypeError) {
+        if (e instanceof RangeError) {
             throw new AlibiError("cover-too-short", `${e.message} Message NON envoyé.`);
         }
         throw new AlibiError("encode-failed",
@@ -105,9 +105,9 @@ export async function encodeOutgoing({
 
     // Discord rejette silencieusement au-delà de 2000 : mieux vaut annuler avec
     // une explication que laisser le message disparaître sans rien dire.
-    if (content.length > maxChars) throw new AlibiError("too-long",
-        `Alibi : message trop long de ${content.length - maxChars} caractères une fois chiffré `
-        + `(${content.length} / ${maxChars}). Coupe-le en deux`
+    if (content.length > MAX_MESSAGE_CHARS) throw new AlibiError("too-long",
+        `Alibi : message trop long de ${content.length - MAX_MESSAGE_CHARS} caractères une fois chiffré `
+        + `(${content.length} / ${MAX_MESSAGE_CHARS}). Coupe-le en deux`
         + (mode === MODE.HIDDEN ? " ou passe en mode compact." : "."));
     return content;
 }

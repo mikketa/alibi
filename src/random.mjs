@@ -29,13 +29,6 @@ export function randomInt(n) {
     }
 }
 
-// `count` entiers uniformes dans [0, n[, sans un appel système par valeur.
-export function randomInts(count, n) {
-    const out = new Array(count);
-    for (let i = 0; i < count; i++) out[i] = randomInt(n);
-    return out;
-}
-
 export function pickOne(list) {
     return list[randomInt(list.length)];
 }

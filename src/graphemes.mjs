@@ -4,10 +4,9 @@
 // code (« ❤️ » en fait deux, « 👨‍👩‍👧 » cinq). Compter ou découper autrement casse
 // le rendu ou fausse le nombre d'emplacements où disperser un payload.
 
-const SEGMENTER = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter() : null;
+const SEGMENTER = new Intl.Segmenter();
 
 export function graphemes(s) {
-    if (!SEGMENTER) return [...s]; // repli : points de code
     const out = [];
     for (const { segment } of SEGMENTER.segment(s)) out.push(segment);
     return out;

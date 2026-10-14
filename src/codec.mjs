@@ -1,4 +1,4 @@
-// Encodages de Alibi : transforme des octets scellés en caractères que
+// Encodages d'Alibi : transforme des octets scellés en caractères que
 // Discord transporte sans les afficher, et l'inverse.
 //
 // Ce module ne chiffre rien — voir `envelope.mjs` — et ne choisit pas ce que dit
@@ -18,7 +18,7 @@
 
 import { FRAME_HEAD, PAD_BLOCK, plausibleFrame, seal, unseal } from "./envelope.mjs";
 import { graphemes } from "./graphemes.mjs";
-import { randomInts } from "./random.mjs";
+import { randomInt } from "./random.mjs";
 
 // ===========================================================================
 // Les trois alphabets
@@ -202,7 +202,7 @@ function scatter(gs, symbols, from = 0) {
 
     // Composition aléatoire uniforme de symbols.length en `slots` parts : les
     // coupes triées donnent les frontières des paquets.
-    const cuts = randomInts(slots - 1, symbols.length + 1).sort((a, b) => a - b);
+    const cuts = Array.from({ length: slots - 1 }, () => randomInt(symbols.length + 1)).sort((a, b) => a - b);
     const first = Math.max(from, 1); // jamais avant le premier graphème
     let out = "", placed = 0;
     for (let g = 0; g < gs.length; g++) {
@@ -220,9 +220,6 @@ function scatter(gs, symbols, from = 0) {
 // besoin — des positions où poser des symboles — et renvoie les graphèmes pour
 // que l'appelant ne les redécoupe pas.
 function coverGraphemes(cover) {
-    if (typeof cover !== "string" || cover.length === 0) {
-        throw new TypeError("Alibi : une phrase de couverture est requise pour encoder.");
-    }
     const gs = graphemes(cover);
     if (innerSlots(gs, 0) < 1) {
         throw new RangeError(
@@ -238,7 +235,6 @@ function coverGraphemes(cover) {
 // `bits` = 2 (sûr, 4 symboles) ou 3 (dense, 8 symboles). Le flux d'octets est
 // ré-empaqueté en groupes de `bits` bits (pas d'alignement octet requis).
 export async function encodeHidden(text, passphrase, { cover, bits = 3, context = "", padding } = {}) {
-    if (bits !== 2 && bits !== 3) bits = 3;
     const bytes = await seal(text, passphrase, context, padding);
     const mask = (1 << bits) - 1;
     const syms = [];

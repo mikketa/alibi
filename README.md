@@ -142,7 +142,7 @@ Capacities are measured on random text, which compresses worst.
 Everything except the Vencord glue runs in plain Node, with no dependencies.
 
 ```bash
-npm test        # Node >= 20, 116 tests
+npm test        # Node >= 20, 115 tests
 npm run audit   # looks for detectable patterns in generated messages
 npm run bench   # performance measurements
 ```

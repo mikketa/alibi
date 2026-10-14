@@ -222,8 +222,7 @@ const decryptAll = (channelId: string, msgs: any[]) => {
 function scanChannel(channelId?: string) {
     if (!channelId) return;
     try {
-        const store: any = MessageStore.getMessages(channelId);
-        decryptAll(channelId, store?.toArray?.() ?? store?._array ?? (Array.isArray(store) ? store : []));
+        decryptAll(channelId, MessageStore.getMessages(channelId)?.toArray() ?? []);
     } catch { /* ignore */ }
 }
 

@@ -85,11 +85,6 @@ const TOTAL_WEIGHT = SHAPES.reduce((n, s) => n + s.weight, 0);
 export const COVER_POOL_SIZE = SHORT.length * (1 + FOLLOWS.length)
     + OPENERS.length * (1 + new Set(TAILS).size + FOLLOWS.length) + QUESTIONS.length;
 
-// Majorant de la longueur d'une couverture automatique : sert à réserver la
-// place dans le budget de caractères d'un message.
-const longest = list => Math.max(...list.map(s => s.length));
-export const MAX_AUTO_COVER_LEN = longest(OPENERS) + 2 + longest(FOLLOWS) + longest(TAILS);
-
 // Une couverture n'est pas qu'une phrase crédible : c'est l'espace dans lequel le
 // payload se disperse, un intervalle entre graphèmes par emplacement. Mesuré sur
 // 800 messages : les couvertures de 2 graphèmes donnaient 100 % de série
@@ -103,15 +98,15 @@ export const MIN_COVER_GRAPHEMES = 8;
 const RECENT_MAX = 16;
 const recent = [];
 
-// Tire jusqu'à obtenir une phrase à la fois inédite et assez longue pour
-// disperser. Le nombre d'essais est borné : avec un pool minuscule fourni par
-// l'utilisateur, on finit par accepter ce qu'on a plutôt que de boucler.
 function remember(cover) {
     recent.push(cover);
     if (recent.length > RECENT_MAX) recent.shift();
     return cover;
 }
 
+// Tire jusqu'à obtenir une phrase à la fois inédite et assez longue pour
+// disperser. Le nombre d'essais est borné : avec un pool minuscule fourni par
+// l'utilisateur, on finit par accepter ce qu'on a plutôt que de boucler.
 function pickFresh(generate, min, tries = 24) {
     let cover = generate(), repli = cover; // repli : meilleure phrase vue jusqu'ici
     for (let i = 0; i < tries; i++) {
@@ -125,8 +120,7 @@ function pickFresh(generate, min, tries = 24) {
 
 function generateAuto() {
     let roll = randomInt(TOTAL_WEIGHT);
-    for (const { weight, build } of SHAPES) if ((roll -= weight) < 0) return build();
-    return pick(OPENERS); // inatteignable, filet de sécurité
+    return SHAPES.find(({ weight }) => (roll -= weight) < 0).build();
 }
 
 // Découpe une liste fournie par l'utilisateur. Le champ de réglage Vencord est

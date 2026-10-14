@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { COVER_POOL_SIZE, MAX_AUTO_COVER_LEN, pickCover } from "../src/covers.mjs";
+import { COVER_POOL_SIZE, pickCover } from "../src/covers.mjs";
 
 test("une couverture perso est reprise telle quelle, sans espaces parasites", () => {
     assert.equal(pickCover("  ouais on se voit demain  "), "ouais on se voit demain");
@@ -26,14 +26,6 @@ test("200 tirages donnent au moins 50 couvertures distinctes", () => {
     const vues = new Set();
     for (let i = 0; i < 200; i++) vues.add(pickCover());
     assert.ok(vues.size >= 50, `${vues.size} couvertures distinctes sur 200 tirages`);
-});
-
-test("MAX_AUTO_COVER_LEN majore vraiment les couvertures tirées", () => {
-    // Sert à réserver la place dans le budget de caractères : s'il sous-estime,
-    // un message peut dépasser la limite Discord.
-    for (let i = 0; i < 500; i++) {
-        assert.ok(pickCover().length <= MAX_AUTO_COVER_LEN);
-    }
 });
 
 test("aucune couverture ne contient de caractère invisible", () => {

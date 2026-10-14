@@ -1,4 +1,4 @@
-// Enveloppe cryptographique de Alibi — la partie qu'il faut relire seule.
+// Enveloppe cryptographique d'Alibi — la partie qu'il faut relire seule.
 //
 // Ce module ne sait rien d'Unicode, de caractères invisibles ni de Discord : il
 // transforme un texte en octets scellés, et l'inverse. Il est séparé du codec
@@ -47,8 +47,6 @@ function concat(parts, total) {
 // Chaque octet économisé = 1 à 4 caractères invisibles en moins. Format "raw"
 // (sans en-tête zlib) pour ne rien gaspiller. Appliquée seulement si elle réduit
 // vraiment la taille ; le drapeau voyage dans l'en-tête chiffré.
-const HAS_COMPRESSION = typeof CompressionStream === "function"
-    && typeof DecompressionStream === "function";
 
 // Mesuré : deflate-raw ne devient gagnant qu'à partir d'une trentaine d'octets
 // (16 octets en donnent 18, 32 en donnent 31). En dessous, c'est du calcul pur
@@ -153,7 +151,7 @@ export async function seal(text, passphrase, context = "", padding = PADDING.BLO
     const raw = ENC.encode(text);
 
     let body = raw, flags = 0;
-    if (HAS_COMPRESSION && raw.length >= MIN_DEFLATE) {
+    if (raw.length >= MIN_DEFLATE) {
         const packed = await deflate(raw);
         if (packed.length < raw.length) { body = packed; flags |= FLAG_ZIPPED; }
     }
