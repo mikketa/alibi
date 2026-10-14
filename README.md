@@ -49,11 +49,6 @@ Alibi is a Vencord *user plugin*, so it is built from source.
 2. Build Vencord with `pnpm build`.
 3. Enable **Alibi** in Vencord's plugin settings and set the passphrase.
 
-> [!NOTE]
-> Alibi was previously called **Papotage**. Old messages still decrypt, but
-> Vencord keeps settings per plugin name: set your passphrase again after
-> updating, and remove the old `userplugins/papotage/` folder.
-
 > [!TIP]
 > On **Vesktop**, point `vencordDir` in `state.json` at the build's `dist`
 > folder, and make sure that folder contains a `package.json`.
