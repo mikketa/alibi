@@ -15,68 +15,75 @@ the ciphertext as invisible characters inside an ordinary-looking phrase.
 
 ---
 
-| What everyone else sees | What you see (plugin + passphrase) |
+| What everyone else sees | What you see |
 | --- | --- |
 | `ouais tranquille et toi ?` | 🔓 `rdv à 20h` |
 
 Both columns are the same Discord message. The secret travels as a few hundred
-zero-width characters scattered between the visible letters. The cover phrases
-are in French, and so is the plugin's interface.
+zero-width characters scattered between the visible letters.
 
-## Features
+> [!NOTE]
+> The cover phrases are in French, and so is the plugin's interface.
 
-- **AES-GCM 256** encryption. The key is derived with PBKDF2-SHA256
-  (600 000 iterations) from a shared passphrase **and the channel ID**, so the
-  same passphrase gives a different key in every conversation.
-- **No visible trace.** The payload carries no header or fixed marker, never
+## ✨ Features
+
+- 🔐 **AES-GCM 256.** The key is derived with PBKDF2-SHA256 (600 000
+  iterations) from a shared passphrase **and the channel ID**, so the same
+  passphrase gives a different key in every conversation.
+- 👻 **No visible trace.** The payload has no header or fixed marker, never
   starts or ends the message, and is split into irregular chunks across the
   cover phrase.
-- **2 674 built-in cover phrases**, with a short memory that avoids repeating
-  one a few messages apart. You can add your own or write the cover yourself.
-- **Fail closed.** If anything goes wrong while sending or editing, the message
-  is cancelled. Plaintext is never sent by accident.
-- **Tamper check.** Each sent message is compared with the copy Discord echoes
-  back, and you are warned if the invisible part was altered in transit.
-- **Silent on failure.** A Papotage message you can't decrypt just shows its
-  cover. A marker would give you away to anyone looking at your screen.
+- 🎭 **2 674 built-in cover phrases**, with a short memory that avoids
+  repeating one a few messages apart.
+- 🛑 **Fail closed.** If anything goes wrong while sending or editing, the
+  message is cancelled. Plaintext is never sent by accident.
+- 🔍 **Tamper check.** Each sent message is compared with the copy Discord
+  echoes back, and you are warned if the invisible part was altered.
 
-## Installation
+## 📦 Installation
 
-Papotage is a Vencord *user plugin*, so it has to be built from source.
+Papotage is a Vencord *user plugin*, so it is built from source.
 
 1. Copy the contents of `src/` into `Vencord/src/userplugins/papotage/`, so
    that `index.tsx` sits directly in that folder.
 2. Build Vencord with `pnpm build`.
 3. Enable **Papotage** in Vencord's plugin settings and set the passphrase.
 
-On **Vesktop**, point `vencordDir` in `state.json` at the build's `dist`
-folder, and make sure that folder contains a `package.json`.
+> [!TIP]
+> On **Vesktop**, point `vencordDir` in `state.json` at the build's `dist`
+> folder, and make sure that folder contains a `package.json`.
 
-## Usage
+## 🚀 Usage
 
 > [!IMPORTANT]
 > Everyone in the conversation must use the **same passphrase**. Share it
 > outside Discord, and make it at least 12 characters long: guessing the
 > passphrase is the most realistic way to break Papotage.
 
-Turn encryption on or off per channel with the lock button in the message bar:
+Turn encryption on or off per channel with the lock button in the message bar.
+**Right-click it to open the settings.**
 
 | Lock | Meaning |
 | --- | --- |
-| Grey | Off, messages are sent normally |
-| Green | On, messages are encrypted |
-| Orange | On, but no passphrase is set |
-
-Right-click the lock to open the settings.
+| ⚪ Grey | Off, messages are sent normally |
+| 🟢 Green | On, messages are encrypted |
+| 🟠 Orange | On, but no passphrase is set |
 
 With encryption on, type as usual and a random cover phrase is chosen for you.
-To pick the visible text yourself, write `cover | secret`:
 
-```
-ouais tranquille et toi ? | rdv à 20h
-```
+> [!TIP]
+> To pick the visible text yourself, write `cover | secret`:
+>
+> ```
+> ouais tranquille et toi ? | rdv à 20h
+> ```
 
-### Settings
+> [!NOTE]
+> A Papotage message you can't decrypt just shows its cover, with no marker.
+> This is on purpose: a marker would give you away to anyone looking at your
+> screen.
+
+### ⚙️ Settings
 
 | Setting | What it does |
 | --- | --- |
@@ -84,12 +91,16 @@ ouais tranquille et toi ? | rdv à 20h
 | Encoding | How the ciphertext is written (see below) |
 | Auto Decrypt | Decrypt incoming messages automatically |
 | Show 🔓 | Prefix decrypted messages so you can tell them apart |
-| Custom Cover | Fixed cover phrase to use instead of a random one (8 characters minimum) |
-| Cover Pool | Your own cover phrases, one per line. The built-in pool is public |
+| Custom Cover | Fixed cover phrase instead of a random one (8 characters minimum) |
+| Cover Pool | Your own cover phrases, one per line |
 | Length Hiding | Pad to size buckets instead of 16-byte blocks. Hides length, costs space |
 | Separator | Delimiter between cover and secret, ` \| ` by default |
 
-### Encodings
+> [!TIP]
+> The built-in cover pool is public, since anyone can read this repository.
+> Add your own phrases in **Cover Pool** for covers nobody can predict.
+
+### 🔤 Encodings
 
 | Mode | Cost per byte | Max secret per message | Notes |
 | --- | --- | --- | --- |
@@ -98,11 +109,13 @@ ouais tranquille et toi ? | rdv à 20h
 | Compact | 1 char | ≈ 1 225 chars | Unicode variation selectors |
 | Emoji | 2 emojis | ≈ 550 chars | Visible and odd-looking, for short messages |
 
-Capacities are measured on random text, which compresses worst. A message that
-would exceed Discord's 2000-character limit is not sent, and you are told by
-how much it overflows.
+Capacities are measured on random text, which compresses worst.
 
-## Limitations
+> [!NOTE]
+> A message that would exceed Discord's 2000-character limit is not sent, and
+> you are told by how much it overflows.
+
+## ⚠️ Limitations
 
 > [!WARNING]
 > - **One key per channel.** Anyone with the passphrase reads the whole
@@ -119,13 +132,14 @@ how much it overflows.
 > decrypted messages exist in plain text inside the client. Anyone with access
 > to your computer can read both.
 
-Version 4 uses a new wire format that **cannot read messages from earlier
-versions**, and earlier versions cannot read it. Everyone needs to update at
-the same time. Messages from another version just show their cover phrase.
+> [!IMPORTANT]
+> Version 4 **cannot read messages from earlier versions**, and earlier
+> versions cannot read it. Everyone needs to update at the same time. Messages
+> from another version just show their cover phrase.
 
-## Development
+## 🛠️ Development
 
-Everything except the Vencord glue runs in plain Node, with no dependencies:
+Everything except the Vencord glue runs in plain Node, with no dependencies.
 
 ```bash
 npm test        # Node >= 20, 116 tests
@@ -145,6 +159,6 @@ index.tsx          Vencord wiring: lock button, send/edit hooks, toasts
        └─ envelope
 ```
 
-## License
+## 📄 License
 
 [MIT](LICENSE)
